@@ -1,0 +1,43 @@
+cmake_minimum_required(VERSION 3.16)
+project(HPHttpServer VERSION 1.0.0 LANGUAGES CXX)
+
+# 1. C++ 标准
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# 2. 寻找依赖库
+# Boost (asio, beast 依赖 system 组件)
+find_package(Boost REQUIRED COMPONENTS system)
+
+# jsoncpp
+find_package(jsoncpp REQUIRED)
+
+# 3. 可执行文件
+add_executable(main
+    main.cpp
+    httpServer.cpp
+    httpServer.h
+    httpSession.cpp
+    httpSession.h
+    IOServicePool.cpp
+    IOServicePool.h
+    logicProcessLayer.cpp
+    logicProcessLayer.h
+    Singleton.h
+)
+
+# 4. 头文件路径
+target_include_directories(main PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+# 5. 链接库（注意这里全部改成 main）
+target_link_libraries(main
+    Boost::system
+    jsoncpp
+    pthread
+)
+
+# 6. Debug 编译选项
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_options(main PRIVATE -g -O0)
+endif()
