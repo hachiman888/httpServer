@@ -10,12 +10,12 @@ class Singleton
 protected:
     //允许子类访问
     Singleton() = default;
-    Singleton(const Singleton<T>&) = delete;
-    Singleton& operator=(const Singleton<T>&) = delete;
 
     //使用static确保实例与程序生命周期一致
     static std::shared_ptr<T> _instance;
 public:
+    Singleton(const Singleton<T>&) = delete;
+    Singleton& operator=(const Singleton<T>&) = delete;
     ~Singleton(){
         std::cout << "Singleton instance has been destructed..." 
         << std::endl;
