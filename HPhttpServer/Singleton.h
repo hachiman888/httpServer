@@ -16,6 +16,7 @@ protected:
 public:
     Singleton(const Singleton<T>&) = delete;
     Singleton& operator=(const Singleton<T>&) = delete;
+
     ~Singleton(){
         std::cout << "Singleton instance has been destructed..." 
         << std::endl;
