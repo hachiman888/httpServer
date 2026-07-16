@@ -29,10 +29,10 @@ public:
         return _instance;
     }
 
-    static void resetInstance(){
-        _instance.reset(); //强制释放智能指针
-        std::cout << "shared_ptr has been reset..." << std::endl;
-    }
+    // static void resetInstance(){
+    //     _instance.reset(); //强制释放智能指针
+    //     std::cout << "shared_ptr has been reset..." << std::endl;
+    // }
 
     void GetAddress(){
         std::cout << _instance->get() << std::endl;

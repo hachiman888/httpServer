@@ -8,12 +8,11 @@
 int main(){
     try{
         auto pool = IOServicePool::GetInstance();
-        auto logicSystem = logicSystem::GetInstance();
         boost::asio::io_context ioc;
         boost::asio::signal_set signals(ioc,SIGINT,SIGTERM);
-        signals.async_wait([&ioc,&pool,&logicSystem](auto,auto){
+        signals.async_wait([&ioc,&pool](auto,auto){
             pool->Stop();
-            pool->resetInstance();
+            //pool->resetInstance();
             ioc.stop();
             std::cout << "ioc stopped..." << std::endl;
         });
@@ -26,3 +25,9 @@ int main(){
     }
 }
 
+/*
+ @TODO
+ 当用户尚未关闭浏览器时，服务器接收到中止信号后
+ 会持续等待定时器超时，才能正常析构
+ 主要体现在逻辑处理层需要等待定时器超时，才能析构
+*/
