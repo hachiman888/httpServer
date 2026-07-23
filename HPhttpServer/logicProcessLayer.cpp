@@ -11,7 +11,7 @@ logicSystem::~logicSystem()
     _b_stop = true;
     _cond.notify_one();
     _worker_thread.join();
-    std::cout << "logicProcesslayer destructed... " << std::endl;
+    std::cout << "logicSystem destructed... " << std::endl;
 }
 
 void logicSystem::postRequestToQueue(std::shared_ptr<httpSession> session)
@@ -48,25 +48,25 @@ void logicSystem::getCallBack(std::shared_ptr<httpSession> session) //此处可�
                 << "</html>\n";
             //创建html格式的回复报文
         }
-        else if(session->_request.target() == "/time"){
-            session->_response.set(http::field::content_type,"text/html");
-             beast::ostream(session->_response.body())
-                << "<html>\n"
-                << "<head><title>Current time</title></head>\n"
-                << "<body>\n"
-                << "<h1>Current time</h1>\n"
-                << "<p>The current time is "
-                << my_program_state::now()
-                << " seconds since the epoch.</p>\n"
-                << "</body>\n"
-                << "</html>\n";
+    else if(session->_request.target() == "/time"){
+        session->_response.set(http::field::content_type,"text/html");
+        beast::ostream(session->_response.body())
+            << "<html>\n"
+            << "<head><title>Current time</title></head>\n"
+            << "<body>\n"
+            << "<h1>Current time</h1>\n"
+            << "<p>The current time is "
+            << my_program_state::now()
+            << " seconds since the epoch.</p>\n"
+            << "</body>\n"
+            << "</html>\n";
         }
-        else //若没找到，则404 not found
-        {
-            session->_response.result(http::status::not_found);  //设置回复报文的状态码，其状态为404 not found
-            session->_response.set(http::field::content_type, "text/plain");
-            beast::ostream(session->_response.body()) << "File not found\r\n";
-        }
+    else //若没找到，则404 not found
+    {
+        session->_response.result(http::status::not_found);  //设置回复报文的状态码，其状态为404 not found
+        session->_response.set(http::field::content_type, "text/plain");
+        beast::ostream(session->_response.body()) << "File not found\r\n";
+    }
 }
 
 void logicSystem::postCallBack(std::shared_ptr<httpSession> session)
@@ -138,11 +138,13 @@ void logicSystem::handleRequest(std::shared_ptr<httpSession> session){
         case http::verb::get:
             session->_response.result(http::status::ok); //状态码设置
             session->_response.set(http::field::server,"beast"); //设置服务器名称
+            session->_buffer.clear();
             _funcMapping[http::verb::get](session); //创建回复报文
             break;
         case http::verb::post:
             session->_response.result(http::status::ok);
             session->_response.set(http::field::server,"beast");
+            session->_buffer.clear();
             _funcMapping[http::verb::post](session); //创建回复报文
             break;
         default:
@@ -150,17 +152,38 @@ void logicSystem::handleRequest(std::shared_ptr<httpSession> session){
             session->_response.set(http::field::content_type,"text/plain"); //设置回复报文类型
             beast::ostream(session->_response.body()) << "Invaild request-method '" //回复错误信息 
             << std::string(session->_request.method_string()) << "'";
+            session->_buffer.clear();
             break;
     }
 }
 
 void logicSystem::writeResponse(std::shared_ptr<httpSession> session)
 {
-    session->_response.content_length(session->_response.body().size());//设置回复报文的包体长度
-    http::async_write(session->_socket,session->_response,
-        [session](beast::error_code ec,std::size_t bytes_transferred){
-            session->_socket.shutdown(tcp::socket::shutdown_send,ec); //发送完成，服务端主动断开连接
-            session->_deadline.cancel(); //消息处理完毕，中止定时器
-            session->_server->clearSession(session->_uuid);
-        });
+    bool keep_alive = session->_request.keep_alive();
+    if (keep_alive)
+    {
+        session->_response.content_length(session->_response.body().size());//设置回复报文的包体长度
+        http::async_write(session->_socket,session->_response,
+            [session](beast::error_code ec,std::size_t bytes_transferred)
+            {
+                session->_deadline.cancel(); //消息处理完毕，中止定时器
+                session->start();
+            });
+    }
+    else
+    {
+        session->_response.content_length(session->_response.body().size());//设置回复报文的包体长度
+        http::async_write(session->_socket,session->_response,
+            [session](beast::error_code ec,std::size_t bytes_transferred){
+                session->_socket.shutdown(tcp::socket::shutdown_send,ec); //发送完成，服务端主动断开连接
+                session->_deadline.cancel(); //消息处理完毕，中止定时器
+                asio::post(session->_socket.get_executor(),[session]()
+                {
+                    session->_server->get_shardedSessionManager().remove_shard(session->_uuid);
+                });
+            });
+    }
+
 }
+
+

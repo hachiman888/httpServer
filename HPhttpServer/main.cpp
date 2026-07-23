@@ -12,7 +12,6 @@ int main(){
         boost::asio::signal_set signals(ioc,SIGINT,SIGTERM);
         signals.async_wait([&ioc,&pool](auto,auto){
             pool->Stop();
-            //pool->resetInstance();
             ioc.stop();
             std::cout << "ioc stopped..." << std::endl;
         });
@@ -30,5 +29,12 @@ int main(){
  当用户尚未关闭浏览器时，服务器接收到中止信号后
  会持续等待定时器超时，才能正常析构
  主要体现在逻辑处理层需要等待定时器超时，才能析构
+ 目前观察到session的生命周期有问题
  test
 */
+
+//@TODO
+/*
+ * 并发能力不是很高
+ * server先被析构，导致后续从map中移除元素会访问非法内存，导致段错误
+ */

@@ -33,11 +33,11 @@ public:
         _uuid = boost::uuids::to_string(uuid);
     }
 
-    tcp::socket& getSocket(){
+    [[nodiscard]] tcp::socket& getSocket() noexcept {
         return _socket;
     }
 
-    std::string getUuid(){
+    [[nodiscard]] std::string getUuid() const noexcept{
         return _uuid;
     }
 

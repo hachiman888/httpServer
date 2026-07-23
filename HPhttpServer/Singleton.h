@@ -26,6 +26,7 @@ public:
         static std::once_flag _flag; //必须设置为静态变量，不如每次调用都会创建一个新的flag
         std::call_once(_flag,[&](){ //确保仅可调用一次
             _instance = std::shared_ptr<T>(new T);
+            //等同于std::shared_ptr<T>(new T);
         });
         return _instance;
     }
