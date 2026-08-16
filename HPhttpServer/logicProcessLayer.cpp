@@ -16,8 +16,10 @@ logicSystem::~logicSystem()
 
 void logicSystem::postRequestToQueue(std::shared_ptr<httpSession> session)
 {
-    bool was_empty = _requestQueue.empty();
+    //此处写了个锁外读取信息，导致竟态条件，永远无法唤醒消费者
+
     std::unique_lock<std::mutex> locker(_mutex);
+    bool was_empty = _requestQueue.empty();
     _requestQueue.push(session); //多线程操作同一个队列，必须加锁
 
     if(was_empty){ //当队列不为空，立即通知工作线程，消费队列
@@ -138,14 +140,14 @@ void logicSystem::handleRequest(std::shared_ptr<httpSession> session){
         case http::verb::get:
             session->_response.result(http::status::ok); //状态码设置
             session->_response.set(http::field::server,"beast"); //设置服务器名称
-            session->_buffer.clear();
             _funcMapping[http::verb::get](session); //创建回复报文
+            session->_buffer.clear();
             break;
         case http::verb::post:
             session->_response.result(http::status::ok);
             session->_response.set(http::field::server,"beast");
-            session->_buffer.clear();
             _funcMapping[http::verb::post](session); //创建回复报文
+            session->_buffer.clear();
             break;
         default:
             session->_response.result(http::status::bad_request); 
@@ -159,14 +161,17 @@ void logicSystem::handleRequest(std::shared_ptr<httpSession> session){
 
 void logicSystem::writeResponse(std::shared_ptr<httpSession> session)
 {
-    bool keep_alive = session->_request.keep_alive();
-    if (keep_alive)
+    if (bool keep_alive = session->_request.keep_alive())
     {
         session->_response.content_length(session->_response.body().size());//设置回复报文的包体长度
         http::async_write(session->_socket,session->_response,
             [session](beast::error_code ec,std::size_t bytes_transferred)
             {
-                session->_deadline.cancel(); //消息处理完毕，中止定时器
+                session->_request = {};
+                session->_response = {}; // 复用前，需要清理消息体
+                session->_buffer.clear();
+                session->_deadline.expires_after(std::chrono::seconds(60));
+                //写成功，重置定时器超时时间,并启动
                 session->start();
             });
     }
@@ -177,13 +182,9 @@ void logicSystem::writeResponse(std::shared_ptr<httpSession> session)
             [session](beast::error_code ec,std::size_t bytes_transferred){
                 session->_socket.shutdown(tcp::socket::shutdown_send,ec); //发送完成，服务端主动断开连接
                 session->_deadline.cancel(); //消息处理完毕，中止定时器
-                asio::post(session->_socket.get_executor(),[session]()
-                {
-                    session->_server->get_shardedSessionManager().remove_shard(session->_uuid);
-                });
+                session->_server.lock()->get_shardedSessionManager().remove_shard(session->_uuid);
             });
     }
-
 }
 
 

@@ -13,29 +13,39 @@ void httpSession::readRequest(){
             boost::ignore_unused(bytes_transferred);
             if(!ec){
                 std::cout << "async_read callback: ec=" << ec << " bytes=" << bytes_transferred
-                << " method=" << self->_request.method_string() << std::endl;
+                << " method=" << self->_request.method_string()
+                << " target:" << self->_request.target() << std::endl;
+                // 读成功，取消定时器,发送operation_aborted
+                self->_deadline.cancel();
                 self->processRequest();
             }
             else{
+                //对端关闭连接
                 if (ec == http::error::end_of_stream){
                     self->_socket.close();
-                    self->_deadline.cancel();
-                    self->_server->_sessionManager.remove_shard(self->_uuid);
+                    self->_deadline.cancel(); // 关闭定时器
+                    if (auto server = self->_server.lock()) {
+                        server->_sessionManager.remove_shard(self->_uuid);
+                    } //延长server生命周期
                     return;
                 }
                 else if (ec == asio::error::operation_aborted){
                     self->_socket.close();
+                    self->_deadline.cancel(); // 关闭定时器
+                    if (auto server = self->_server.lock()) {
+                       server->_sessionManager.remove_shard(self->_uuid);
+                    } //延长server生命周期
                     return;
                 }
                 std::cerr << "readRequest error occurred... ec:"
                     << ec << " " << ec.what()<< std::endl;
-                asio::post(self->_socket.get_executor(),[self]()
-                {
-                    self->_server->_sessionManager.remove_shard(self->_uuid);
-                });
-                self->_deadline.cancel();
+                self->_socket.close();
+                self->_deadline.cancel(); // 关闭定时器
+                if (auto server = self->_server.lock()) {
+                       server->_sessionManager.remove_shard(self->_uuid);
+                } //延长server生命周期
             }
-        });   
+        }); 
 }
 
 void httpSession::checkDeadline(){
@@ -57,7 +67,9 @@ void httpSession::checkDeadline(){
         // 3. 只有真正自然超时（ec == 0），才关闭连接
         boost::system::error_code close_ec;
         self->_socket.close(close_ec); // 用一个局部的 close_ec 接收关闭时的错误，别覆盖了外面的 ec
-        self->_server->_sessionManager.remove_shard(self->_uuid);
+        if (auto server = self->_server.lock()) {
+                       server->_sessionManager.remove_shard(self->_uuid);
+        } //延长server生命周期
     });
 }
 

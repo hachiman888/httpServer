@@ -26,7 +26,7 @@ class httpSession : public std::enable_shared_from_this<httpSession>
 {
 friend class logicSystem;
 public:
-    httpSession(asio::io_context& io,httpServer* server)
+    httpSession(asio::io_context& io,std::shared_ptr<httpServer> server)
     :_socket(io),_server(server)
     {
         boost::uuids::uuid uuid = boost::uuids::random_generator()();//生成随机的uuid
@@ -41,6 +41,10 @@ public:
         return _uuid;
     }
 
+    [[nodiscard]] asio::steady_timer& getTimer() noexcept{
+        return _deadline;
+    }
+
     void start();
 
     ~httpSession(){
@@ -49,7 +53,7 @@ public:
 
 private:
     tcp::socket _socket; //存储用于通信的socket
-    httpServer* _server; //方便类内使用map来管理会话
+    std::weak_ptr<httpServer> _server; //方便类内使用map来管理会话,使用weakptr来延长server生命周期，防止server先于session析构
     std::string _uuid;  //用于存储会话的uuid
     beast::flat_buffer _buffer{8192}; //beast库提供的扁平缓冲区
     http::request<http::dynamic_body> _request; //beast库提供的request模板类，期中dynamic body支持各类型请求

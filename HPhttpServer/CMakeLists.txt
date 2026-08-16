@@ -35,9 +35,10 @@ target_link_libraries(main
     Boost::system
     jsoncpp
     pthread
+    profiler
 )
 
 # 6. Debug 编译选项
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    target_compile_options(main PRIVATE -g -O0)
+    target_compile_options(main PRIVATE -g -O2)
 endif()

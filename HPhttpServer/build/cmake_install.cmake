@@ -1,4 +1,4 @@
-# Install script for directory: /home/hachiman/HPhttpServer
+# Install script for directory: /home/hachiman/httpServer_framework/HPhttpServer
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -50,5 +50,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/home/hachiman/HPhttpServer/build/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/home/hachiman/httpServer_framework/HPhttpServer/build/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

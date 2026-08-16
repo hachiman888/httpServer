@@ -31,6 +31,8 @@ public:
     //交由session所隶属的ioc调用
     void remove_shard(std::string uuid);
 
+    void kill_all();
+
 
 private:
     struct Shard
@@ -43,15 +45,17 @@ private:
     std::vector<Shard> _shards;
 };
 
-class httpServer{
+class httpServer : public std::enable_shared_from_this<httpServer>{
     friend class httpSession;
 public:
     httpServer(asio::io_context& ioc,short port_num);
     ~httpServer();
     shardedSessionManager& get_shardedSessionManager() noexcept;
+    void startListening();
+    void stop_Accept();
 
 private:
-    void startListening();
+
     void do_Accept();
     void handle_Accept(std::shared_ptr<httpSession> new_session,const boost::system::error_code& ec);
     asio::io_context& _ioc; //不可复制，只可移动

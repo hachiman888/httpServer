@@ -4,19 +4,31 @@
 #include <iostream>
 #include <boost/asio.hpp>
 #include <exception>
+#include <gperftools/profiler.h>
+
 
 int main(){
     try{
-        auto pool = IOServicePool::GetInstance();
+        ProfilerStart("cpu.prof");
         boost::asio::io_context ioc;
+        // 对于enable_shared_from_this 内部的那个 weak_ptr 只有在 make_shared 返回、shared_ptr 真正接管对象的那一刻才被初始化。
+        // 构造函数还在执行时，对象尚未被任何 shared_ptr 持有，此时调用 shared_from_this() 在 C++17 起是未定义行为，
+        // libstdc++ 的实现表现为抛出 std::bad_weak_ptr。
+        // 因此，需要拆分server构造函数和session构造函数的相关性，解耦合
+        auto server = std::make_shared<httpServer>(ioc,8081);
+        server->startListening();
+        auto pool = IOServicePool::GetInstance();
+
         boost::asio::signal_set signals(ioc,SIGINT,SIGTERM);
-        signals.async_wait([&ioc,&pool](auto,auto){
+        signals.async_wait([&ioc,&pool,server](auto,auto){
+            server->stop_Accept();
+            auto& sessionManager = server->get_shardedSessionManager();
+            sessionManager.kill_all();
             pool->Stop();
             ioc.stop();
-            std::cout << "ioc stopped..." << std::endl;
+            ProfilerStop();
+            std::cout << "all stopped..." << std::endl;
         });
-
-        httpServer s(ioc,8080);
         ioc.run();
     }catch(std::exception& e){
         std::cerr << "error: " << e.what() << std::endl;
@@ -24,17 +36,9 @@ int main(){
     }
 }
 
-/*
- @TODO
- 当用户尚未关闭浏览器时，服务器接收到中止信号后
- 会持续等待定时器超时，才能正常析构
- 主要体现在逻辑处理层需要等待定时器超时，才能析构
- 目前观察到session的生命周期有问题
- test
+/*TODO
+ * 并发能力有待提高
+ * 首先需要把调试用的日志去掉
+ * 拓展逻辑系统的工作线程，避免队列过长导致排队时间上升
+ * 
 */
-
-//@TODO
-/*
- * 并发能力不是很高
- * server先被析构，导致后续从map中移除元素会访问非法内存，导致段错误
- */
