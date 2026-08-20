@@ -6,5 +6,5 @@ CXX_DEFINES = -DBOOST_SYSTEM_DYN_LINK -DBOOST_SYSTEM_NO_LIB
 
 CXX_INCLUDES = -I/home/hachiman/httpServer_framework/HPhttpServer
 
-CXX_FLAGS = -g -std=c++20 -fdiagnostics-color=always -g -O2
+CXX_FLAGS = -O3 -DNDEBUG -std=c++20
 

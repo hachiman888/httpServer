@@ -11,7 +11,7 @@ logicSystem::~logicSystem()
     _b_stop = true;
     _cond.notify_one();
     _worker_thread.join();
-    std::cout << "logicSystem destructed... " << std::endl;
+    //std::cout << "logicSystem destructed... " << std::endl;
 }
 
 void logicSystem::postRequestToQueue(std::shared_ptr<httpSession> session)

@@ -49,7 +49,7 @@ httpServer::httpServer(asio::io_context& ioc,short port_num)
 
 httpServer::~httpServer()
 {
-    std::cout << "Server destructed... " << std::endl;
+    //std::cout << "Server destructed... " << std::endl;
 }
 
 shardedSessionManager& httpServer::get_shardedSessionManager() noexcept

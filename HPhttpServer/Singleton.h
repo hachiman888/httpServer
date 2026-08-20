@@ -18,8 +18,8 @@ public:
     Singleton& operator=(const Singleton<T>&) = delete;
 
     ~Singleton(){
-        std::cout << "Singleton instance has been destructed..." 
-        << std::endl;
+        //std::cout << "Singleton instance has been destructed..." 
+        //<< std::endl;
     }
 
     static std::shared_ptr<T> GetInstance(){

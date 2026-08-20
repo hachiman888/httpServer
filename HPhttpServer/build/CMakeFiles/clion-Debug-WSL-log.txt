@@ -1,4 +1,0 @@
-/usr/bin/cmake -DCMAKE_BUILD_TYPE=Debug -G "Unix Makefiles" -S /home/hachiman/httpServer_framework/HPhttpServer -B /home/hachiman/httpServer_framework/HPhttpServer/build
--- Configuring done (0.0s)
--- Generating done (0.0s)
--- Build files have been written to: /home/hachiman/httpServer_framework/HPhttpServer/build

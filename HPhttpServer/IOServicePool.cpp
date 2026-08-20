@@ -17,7 +17,7 @@ IOServicePool::IOServicePool(std::size_t size)
 }
 
 IOServicePool::~IOServicePool(){
-    std::cout << "IOServicePool has been destructed..." << std::endl;
+    //std::cout << "IOServicePool has been destructed..." << std::endl;
 }
 
 boost::asio::io_context& IOServicePool::GetIOService(){
@@ -34,5 +34,5 @@ void IOServicePool::Stop(){
         //析构各work，使得ioc在空闲时，退出run函数
         work.reset();
     }
-    std::cout << "all works have been deleted... " << std::endl;
+    //std::cout << "all works have been deleted... " << std::endl;
 }

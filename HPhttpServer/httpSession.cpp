@@ -12,16 +12,17 @@ void httpSession::readRequest(){
         [self](beast::error_code ec,std::size_t bytes_transferred){
             boost::ignore_unused(bytes_transferred);
             if(!ec){
-                std::cout << "async_read callback: ec=" << ec << " bytes=" << bytes_transferred
-                << " method=" << self->_request.method_string()
-                << " target:" << self->_request.target() << std::endl;
+                //std::cout << "async_read callback: ec=" << ec << " bytes=" << bytes_transferred
+                //<< " method=" << self->_request.method_string()
+                //<< " target:" << self->_request.target() << std::endl;
                 // 读成功，取消定时器,发送operation_aborted
                 self->_deadline.cancel();
                 self->processRequest();
             }
             else{
                 //对端关闭连接
-                if (ec == http::error::end_of_stream){
+                if (ec == asio::error::eof || ec == asio::error::connection_reset
+                    || ec == http::error::end_of_stream){
                     self->_socket.close();
                     self->_deadline.cancel(); // 关闭定时器
                     if (auto server = self->_server.lock()) {
