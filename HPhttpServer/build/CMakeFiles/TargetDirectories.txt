@@ -1,3 +1,0 @@
-/home/hachiman/httpServer_framework/HPhttpServer/build/CMakeFiles/main.dir
-/home/hachiman/httpServer_framework/HPhttpServer/build/CMakeFiles/edit_cache.dir
-/home/hachiman/httpServer_framework/HPhttpServer/build/CMakeFiles/rebuild_cache.dir

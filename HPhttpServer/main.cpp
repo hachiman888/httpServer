@@ -3,19 +3,19 @@
 #include "IOServicePool.h"
 #include <iostream>
 #include <boost/asio.hpp>
-#include <exception>
-#include <gperftools/profiler.h>
+#include <exception>   
+// #include <gperftools/profiler.h>
 
 
 int main(){
     try{
-        ProfilerStart("cpu.prof");
+        // ProfilerStart("cpu.prof");
         boost::asio::io_context ioc;
         // 对于enable_shared_from_this 内部的那个 weak_ptr 只有在 make_shared 返回、shared_ptr 真正接管对象的那一刻才被初始化。
         // 构造函数还在执行时，对象尚未被任何 shared_ptr 持有，此时调用 shared_from_this() 在 C++17 起是未定义行为，
         // libstdc++ 的实现表现为抛出 std::bad_weak_ptr。
         // 因此，需要拆分server构造函数和session构造函数的相关性，解耦合
-        auto server = std::make_shared<httpServer>(ioc,8081);
+        auto server = std::make_shared<httpServer>(ioc,8080);
         server->startListening();
         auto pool = IOServicePool::GetInstance();
 
@@ -26,7 +26,7 @@ int main(){
             sessionManager.kill_all();
             pool->Stop();
             ioc.stop();
-            ProfilerStop();
+            // ProfilerStop();
             std::cout << "all stopped..." << std::endl;
         });
         ioc.run();
@@ -38,7 +38,7 @@ int main(){
 
 /*TODO
  * 并发能力有待提高
- * 首先需要把调试用的日志去掉
+ * 
  * 拓展逻辑系统的工作线程，避免队列过长导致排队时间上升
  * 需要将回复模板化
  * 请求服用时，对于buffer的重置可以用consume或者clear搞定
