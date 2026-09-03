@@ -26,6 +26,7 @@ add_executable(main
     logicProcessLayer.cpp
     logicProcessLayer.h
     Singleton.h
+    shared_object_pool.hpp
 )
 
 # 4. 头文件路径

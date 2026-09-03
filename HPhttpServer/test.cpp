@@ -1,0 +1,41 @@
+#include <iostream>
+#include "shared_object_pool.hpp"
+#include <chrono>
+
+
+struct TestObj{
+    int a;
+    double b;
+    char c[32];
+
+    TestObj(): a(1),b(2.0){
+        c[0] = '\0';
+    }
+};
+
+void stdTest(){
+    auto start = std::chrono::high_resolution_clock::now();
+    for(int i = 0; i < 100000;i++){
+        TestObj* p = new TestObj;
+        [[maybe_unused]] volatile auto sink = p;
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    double duration = std::chrono::duration<double>(end - start).count();
+    std::cout << "std test : " << duration << std::endl;
+}
+
+void poolTest(){
+    auto& pool = ig::sharedObjectPool<TestObj>::getInstance();
+    auto start = std::chrono::high_resolution_clock::now(); 
+    for(int i = 0; i < 100000;i++){
+        [[maybe_unused]] volatile auto sink = pool.Get().get();
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    double duration = std::chrono::duration<double>(end - start).count();
+    std::cout << "pool test : " << duration << std::endl;
+}
+
+int main(){
+    stdTest();
+    poolTest();
+}

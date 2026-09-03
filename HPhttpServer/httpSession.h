@@ -48,7 +48,7 @@ public:
     void start();
 
     ~httpSession(){
-        //std::cout << "httpSession destructed..." << std::endl;
+        std::cout << "httpSession destructed... uuid : " << _uuid << std::endl;
     }
 
 private:
