@@ -52,10 +52,10 @@ public:
     }
 
 private:
-    tcp::socket _socket; //存储用于通信的socket
-    std::weak_ptr<httpServer> _server; //方便类内使用map来管理会话,使用weakptr来延长server生命周期，防止server先于session析构
+    tcp::socket _socket;                        //存储用于通信的socket
+    std::weak_ptr<httpServer> _server;          //方便类内使用map来管理会话,使用weakptr来延长server生命周期，防止server先于session析构
     std::string _uuid;  //用于存储会话的uuid
-    beast::flat_buffer _buffer{8192}; //beast库提供的扁平缓冲区
+    beast::flat_buffer _buffer{8192};           //beast库提供的扁平缓冲区
     http::request<http::dynamic_body> _request; //beast库提供的request模板类，期中dynamic body支持各类型请求
     http::response<http::dynamic_body> _response;
     asio::steady_timer _deadline{_socket.get_executor(),std::chrono::seconds(60)};  //后续可以 优化为时间轮，避免高并发场景下创建定时器的开销

@@ -12,9 +12,9 @@ void httpSession::readRequest(){
         [self](beast::error_code ec,std::size_t bytes_transferred){
             boost::ignore_unused(bytes_transferred);
             if(!ec){
-                //std::cout << "async_read callback: ec=" << ec << " bytes=" << bytes_transferred
-                //<< " method=" << self->_request.method_string()
-                //<< " target:" << self->_request.target() << std::endl;
+                // std::cout << "async_read callback: ec=" << ec << " bytes=" << bytes_transferred
+                // << " method=" << self->_request.method_string()
+                // << " target:" << self->_request.target() << std::endl;
                 // 读成功，取消定时器,发送operation_aborted
                 self->_deadline.cancel();
                 self->processRequest();
