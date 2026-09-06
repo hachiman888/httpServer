@@ -6,7 +6,7 @@
 struct TestObj{
     int a;
     double b;
-    char c[32];
+    char c[4096];
 
     TestObj(): a(1),b(2.0){
         c[0] = '\0';

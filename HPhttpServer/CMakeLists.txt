@@ -32,7 +32,7 @@ add_executable(main
 # 4. 头文件路径
 target_include_directories(main PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-# 5. 链接库（注意这里全部改成 main）
+# 5. 链接库
 target_link_libraries(main
     Boost::system
     jsoncpp
