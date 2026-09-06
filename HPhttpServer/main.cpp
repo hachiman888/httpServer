@@ -1,15 +1,16 @@
 #include "httpServer.h"
 #include "httpSession.h"
 #include "IOServicePool.h"
+#include "shared_object_pool.hpp"
 #include <iostream>
 #include <boost/asio.hpp>
 #include <exception>   
-// #include <gperftools/profiler.h>
+#include <gperftools/profiler.h>
 
 
 int main(){
     try{
-        // ProfilerStart("cpu.prof");
+        //ProfilerStart("cpu.prof");
         boost::asio::io_context ioc;
         // 对于enable_shared_from_this 内部的那个 weak_ptr 只有在 make_shared 返回、shared_ptr 真正接管对象的那一刻才被初始化。
         // 构造函数还在执行时，对象尚未被任何 shared_ptr 持有，此时调用 shared_from_this() 在 C++17 起是未定义行为，
@@ -18,6 +19,7 @@ int main(){
         auto server = std::make_shared<httpServer>(ioc,8080);
         server->startListening();
         auto pool = IOServicePool::GetInstance();
+        auto& objPool = ig::sharedObjectPool<httpSession>::getInstance();
 
         boost::asio::signal_set signals(ioc,SIGINT,SIGTERM);
         signals.async_wait([&ioc,&pool,server](auto,auto){
@@ -26,7 +28,7 @@ int main(){
             sessionManager.kill_all();
             pool->Stop();
             ioc.stop();
-            // ProfilerStop();
+            //ProfilerStop();
             std::cout << "all stopped..." << std::endl;
         });
         ioc.run();

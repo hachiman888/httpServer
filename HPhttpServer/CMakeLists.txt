@@ -3,7 +3,7 @@ project(HPHttpServer VERSION 1.0.0 LANGUAGES CXX)
 
 # 1. C++ 标准
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -43,4 +43,6 @@ target_link_libraries(main
 # 6. Debug 编译选项
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_compile_options(main PRIVATE -g -O2)
+elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+    target_compile_options(main PRIVATE -O3)
 endif()

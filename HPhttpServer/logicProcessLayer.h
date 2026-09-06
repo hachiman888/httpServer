@@ -7,6 +7,8 @@
 #include <boost/beast/version.hpp>
 #include <functional>
 #include <thread>
+#include <atomic>
+#include <string>
 #include <queue>
 #include <map>
 
@@ -17,11 +19,6 @@ namespace ip = asio::ip;
 using tcp = ip::tcp;
 
 namespace my_program_state{
-    static inline std::size_t request_count(){  //用于统计有多少请求
-        static std::size_t count = 0;
-        return ++count;
-    }
-
     static inline std::time_t now(){
         return std::time(0);//返回当前时间戳
     }
@@ -40,17 +37,19 @@ public:
 private:
     logicSystem();
     void registerCallBacks();
-    void getCallBack(std::shared_ptr<httpSession>);
+    void buildGetResponse(std::shared_ptr<httpSession> session); // GET 路由分流+装配
     void postCallBack(std::shared_ptr<httpSession>);
     void processRequest();
     void handleRequest(std::shared_ptr<httpSession>);
     void writeResponse(std::shared_ptr<httpSession>);
-
-    std::queue<std::shared_ptr<httpSession>> _requestQueue;
+    
     bool _b_stop;
     std::mutex _mutex;
     std::condition_variable _cond;
-    std::thread _worker_thread;
+    std::vector<std::jthread> _worker_threads;
     std::map<http::verb,CallBack> _funcMapping;
+    std::atomic<std::uint64_t> _requestCount{0};  // 用于count计数，面向多线程，必须原子
+    std::string _resp404;                         // 启动时预生成的完整 404 响应字节
+    std::queue<std::shared_ptr<httpSession>> _requestQueue;
 };
 

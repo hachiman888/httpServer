@@ -8,6 +8,8 @@
 #include <utility>
 #include <mutex>
 #include <type_traits>
+#include <print>
+#include <thread>
 
 
 /*
@@ -40,14 +42,14 @@
 */
 
 namespace ig{
-    static constexpr std::size_t kObjectPoolDefaultSize = 10000;      // 对象池默认缓存对象的数量
-    static constexpr std::size_t kObjectPoolDefaultExtendSize = 1000; //
+    static constexpr std::size_t kObjectPoolDefaultSize = 1500;      // 对象池默认缓存对象的数量
+    static constexpr std::size_t kObjectPoolDefaultExtendSize = 300; //
     
 
     template<typename ObjectType,std::size_t N = kObjectPoolDefaultSize>
     class sharedObjectPool{
     public:
-        [[nodiscard]] static sharedObjectPool& getInstance(){
+        [[nodiscard]] static inline sharedObjectPool& getInstance(){
             static sharedObjectPool pool(N);  // 单例模式构造
             return pool;
         }
@@ -70,6 +72,7 @@ namespace ig{
             if(free_queue_.empty()){
                 // 若空闲队列为空，则需要拓展对象池
                 Extend(kObjectPoolDefaultExtendSize);
+                //std::println("called sharedObjectPool's extend...,current queue size:{}",free_queue_.size());
             }
 
             // 1.从空闲队列中取出一块未初始化的裸内存
@@ -79,6 +82,7 @@ namespace ig{
             // 2. 在裸内存上使用placement new进行构造
             // 使用完美转发保证参数属性
             ObjectType* obj_ptr = ::new(raw_ptr) ObjectType(std::forward<Args>(agrs)...);
+            //std::println("called sharedObjectPool's get...,current queue size:{}",free_queue_.size());
 
             // 3. 返回自定义deleter 的 shared_ptr
             // 当引用计数归零时，手动调用对象的析构函数，并将空闲内存变成裸内存返回池中
@@ -118,9 +122,11 @@ namespace ig{
 
             // 按连续内存块精准释放扩展内存
             for(void* block : extend_blocks_){
-                ::operator delete[](block_ptr);
+                ::operator delete[](block);
             }
             extend_blocks_.clear();
+            // free_queue_ 会在其自身析构时自动清空内部的 void* 成员（不需要也不应该 delete 它们）
+            //std::println("sharedObjectPool destructed...");
         }
         
 

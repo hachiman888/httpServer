@@ -20,7 +20,7 @@ class shardedSessionManager
 public:
     //根据ioc池中的ioc数量来决定分多少个片
     explicit shardedSessionManager
-        (std::size_t shardsCount = std::thread::hardware_concurrency()) noexcept:
+        (std::size_t shardsCount = std::thread::hardware_concurrency() / 2) noexcept:
         _shardsCount(shardsCount),_shards(shardsCount){}
 
     [[nodiscard]]std::size_t get_shard_index(std::string_view uuid) const;
@@ -47,6 +47,7 @@ private:
 
 class httpServer : public std::enable_shared_from_this<httpServer>{
     friend class httpSession;
+    friend class LogicSystem;
 public:
     httpServer(asio::io_context& ioc,short port_num);
     ~httpServer();

@@ -1,4 +1,5 @@
 #include "httpServer.h"
+#include "shared_object_pool.hpp"
 
 std::size_t shardedSessionManager::get_shard_index(std::string_view uuid) const
 {
@@ -45,7 +46,10 @@ void shardedSessionManager::kill_all(){
 }
 
 httpServer::httpServer(asio::io_context& ioc,short port_num)
-    :_ioc(ioc),_acceptor(_ioc,tcp::endpoint(tcp::v4(),port_num)){}
+    :_ioc(ioc),_acceptor(_ioc,tcp::endpoint(tcp::v4(),port_num)){
+        beast::error_code ec;
+        _acceptor.set_option(beast::net::socket_base::reuse_address(true), ec); // 重用端口
+    }
 
 httpServer::~httpServer()
 {
@@ -70,7 +74,8 @@ void httpServer::startListening()
 void httpServer::do_Accept()
 {
     auto& ioc = IOServicePool::GetInstance()->GetIOService(); //从ioc池中获取一个ioc
-    std::shared_ptr<httpSession> new_Session = std::make_shared<httpSession>(ioc,shared_from_this()); //根据ioc创建新会话
+    auto& objPool = ig::sharedObjectPool<httpSession>::getInstance();
+    std::shared_ptr<httpSession> new_Session = objPool.Get(ioc,shared_from_this()); //根据ioc创建新会话
     _acceptor.async_accept(new_Session->getSocket(),
         std::bind(&httpServer::handle_Accept,this,new_Session,std::placeholders::_1));
     //将新连接和ioc绑定，使得ioc监听其所有异步事件

@@ -78,3 +78,36 @@ void httpSession::processRequest(){
     auto self = shared_from_this();
     logicSystem::GetInstance()->postRequestToQueue(self);
 }
+
+void httpSession::sendRaw(bool keep_alive){
+    auto self = shared_from_this();
+    asio::async_write(_socket,asio::buffer(_sendbuf.data(),_sendbuf.size()),
+        [self,keep_alive](beast::error_code ec, std::size_t /*bytes*/){
+            // 若写失败
+            if(ec){
+                beast::error_code ignored;
+                self->_socket.close(ignored);
+                self->_deadline.cancel();
+                if(auto server = self->_server.lock()){
+                    server->_sessionManager.remove_shard(self->_uuid);
+                }
+                return;
+            }
+
+            // 若非长连接
+            if(!keep_alive){
+                beast::error_code ignored;
+                self->_socket.shutdown(tcp::socket::shutdown_send, ignored);
+                self->_socket.close(ignored);
+                self->_deadline.cancel();
+                if (auto server = self->_server.lock())
+                    server->_sessionManager.remove_shard(self->_uuid);
+                return;
+            }
+
+            // 若是长连接，则继续下一个请求
+            self->_request.clear();     // 复用当前request类
+            self->_deadline.expires_after(std::chrono::seconds(60));
+            self->start();
+        });
+}

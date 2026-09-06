@@ -20,7 +20,7 @@ public:
     IOServicePool(const IOServicePool&) = delete;
     IOService& operator=(const IOServicePool&) = delete;
 private:
-    IOServicePool(std::size_t size = std::thread::hardware_concurrency());
+    IOServicePool(std::size_t size = std::thread::hardware_concurrency() / 3);
     std::vector<IOService> _IOServices; //初始化多个ioc
     std::vector<WorkPtr> _works; //用于和多个ioc配对的work对象
     std::vector<std::jthread> _threads; //用于管理所有线程

@@ -8,7 +8,7 @@ struct TestObj{
     double b;
     char c[4096];
 
-    TestObj(): a(1),b(2.0){
+    TestObj(int A,int B):a(A),b(B) {
         c[0] = '\0';
     }
 };
@@ -16,7 +16,7 @@ struct TestObj{
 void stdTest(){
     auto start = std::chrono::high_resolution_clock::now();
     for(int i = 0; i < 100000;i++){
-        TestObj* p = new TestObj;
+        TestObj* p = new TestObj(1,2);
         [[maybe_unused]] volatile auto sink = p;
     }
     auto end = std::chrono::high_resolution_clock::now();
@@ -28,7 +28,7 @@ void poolTest(){
     auto& pool = ig::sharedObjectPool<TestObj>::getInstance();
     auto start = std::chrono::high_resolution_clock::now(); 
     for(int i = 0; i < 100000;i++){
-        [[maybe_unused]] volatile auto sink = pool.Get().get();
+        [[maybe_unused]] volatile auto sink = pool.Get(1,2).get();
     }
     auto end = std::chrono::high_resolution_clock::now();
     double duration = std::chrono::duration<double>(end - start).count();

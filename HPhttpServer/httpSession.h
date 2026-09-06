@@ -3,6 +3,7 @@
 #include "logicProcessLayer.h"
 #include <chrono>
 #include <memory>
+#include <print>
 #include <iostream>
 #include <boost/asio.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -31,6 +32,7 @@ public:
     {
         boost::uuids::uuid uuid = boost::uuids::random_generator()();//生成随机的uuid
         _uuid = boost::uuids::to_string(uuid);
+        _sendbuf.reserve(1024);     // 发送缓存仅预分配这一次
     }
 
     [[nodiscard]] tcp::socket& getSocket() noexcept {
@@ -48,7 +50,7 @@ public:
     void start();
 
     ~httpSession(){
-        std::cout << "httpSession destructed... uuid : " << _uuid << std::endl;
+         //std::println("httpSession destructed... uuid: {}", _uuid);
     }
 
 private:
@@ -58,10 +60,12 @@ private:
     beast::flat_buffer _buffer{8192};           //beast库提供的扁平缓冲区
     http::request<http::dynamic_body> _request; //beast库提供的request模板类，期中dynamic body支持各类型请求
     http::response<http::dynamic_body> _response;
+    std::string _sendbuf;                       // 裸发送缓冲区 
     asio::steady_timer _deadline{_socket.get_executor(),std::chrono::seconds(60)};  //后续可以 优化为时间轮，避免高并发场景下创建定时器的开销
     //与_socket的调度器绑定，若连接上无任何读写互动，则超时触发回调。
 
     void readRequest();
     void checkDeadline();
     void processRequest();
+    void sendRaw(bool keep_live);
 }; 
