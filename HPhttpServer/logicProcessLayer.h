@@ -29,6 +29,7 @@ class httpSession;
 class logicSystem : public Singleton<logicSystem>
 {
 friend class Singleton<logicSystem>;
+friend class httpSession;
 using CallBack = std::function<void(std::shared_ptr<httpSession>)>;
 public:
     ~logicSystem();

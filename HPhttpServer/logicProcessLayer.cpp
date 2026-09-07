@@ -11,9 +11,10 @@ HTTP 协议不强制要求响应必须由 Beast 产生。
 （Beast 官方 example 里也有 std::string 直接发送的写法）。
 
 所以将对应的回复报文模板化，
-绕过beast的自动生成头，和beast的ostream
+绕过beast的自动生成头，和beast的ostream等
 */
 
+// 逻辑处理只做重活
 namespace{
     // 通用拼装器：head + Content-Length数字 + 空行 + prefix + 动态数字 + suffix
     // out 必须已 reserve预分配；全程只 append/memcpy + to_chars，不做任何堆分配
@@ -107,11 +108,11 @@ logicSystem::logicSystem() : _b_stop(false)
     // 预生成404 响应报文 
     _resp404 = makeStaticResponse("404 Not Found","text/plain","File not found\r\n");
 
-    for(std::size_t i = 0; i < std::thread::hardware_concurrency();i++){
+    //for(std::size_t i = 0; i < std::thread::hardware_concurrency();i++){
         _worker_threads.emplace_back([this]{
-            this->processRequest();
-        });
-    }
+            this->processRequest();});
+        //});
+    //}
 }
 
 logicSystem::~logicSystem()
@@ -202,6 +203,7 @@ void logicSystem::postCallBack(std::shared_ptr<httpSession> session)
             session->_response.result(http::status::not_found);  //设置回复报文的状态码，其状态为404 not found
             session->_response.set(http::field::content_type, "text/plain");
             beast::ostream(session->_response.body()) << "File not found\r\n";
+            // ostream相关方法或许可以想办法绕过
         }
 }
 
@@ -249,9 +251,9 @@ void logicSystem::handleRequest(std::shared_ptr<httpSession> session){
     {
         case http::verb::get:
             buildGetResponse(session);  // get方法走新的字节装配路径，字节会被装进session->_sendbuf中
-            break;
+            break;                      // 此处待修改，应改成重路由消息构建方法
         case http::verb::post:
-            session->_response.clear();
+            session->_response.clear();  // post方法和其他非法方法也应该绕过ostream，自己写报文模板
             session->_response.body().clear();
             session->_response.result(http::status::ok);
             session->_response.set(http::field::server,"beast");
@@ -315,6 +317,7 @@ void logicSystem::writeResponse(std::shared_ptr<httpSession> session)
 }
 
 //TODO
-// 不应该让读和写处于不同的线程执行，会有不必要的上下文切换
+// 不应该让读和写处于不同的线程执行，会有不必要的上下文切换,用asio::post或asio::distach
 // 给 worker 批量加上限（128），让多个 worker 真正并行消费；更进一步做每 worker 私有队列/无锁队列；
 // 优化定时器
+// 区分动态路径与静态路径，静态直接走模板，动态走逻辑层队列处理

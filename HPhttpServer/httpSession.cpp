@@ -76,7 +76,24 @@ void httpSession::checkDeadline(){
 
 void httpSession::processRequest(){
     auto self = shared_from_this();
-    logicSystem::GetInstance()->postRequestToQueue(self);
+    // 若请求路径为静态，则直接原地发送
+    switch(self->_request.method()){
+        case http::verb::get:
+            logicSystem::GetInstance()->buildGetResponse(self);
+            self->sendRaw(self->_request.keep_alive());
+            break;
+        case http::verb::post:
+            logicSystem::GetInstance()->postRequestToQueue(self);
+            break;
+        default:
+            self->_response.clear();
+            self->_response.body().clear();
+            self->_response.result(http::status::bad_request); 
+            self->_response.set(http::field::content_type,"text/plain"); //设置回复报文类型
+            beast::ostream(self->_response.body()) << "Invaild request-method '" //回复错误信息 
+            << std::string(self->_request.method_string()) << "'";
+            break;
+    }
 }
 
 void httpSession::sendRaw(bool keep_alive){
