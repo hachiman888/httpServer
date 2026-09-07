@@ -250,8 +250,8 @@ void logicSystem::handleRequest(std::shared_ptr<httpSession> session){
     switch (session->_request.method())
     {
         case http::verb::get:
-            buildGetResponse(session);  // get方法走新的字节装配路径，字节会被装进session->_sendbuf中
-            break;                      // 此处待修改，应改成重路由消息构建方法
+            buildGetResponse(session); // 此处待修改，应改成重路由消息构建方法
+            break;                      
         case http::verb::post:
             session->_response.clear();  // post方法和其他非法方法也应该绕过ostream，自己写报文模板
             session->_response.body().clear();
@@ -260,12 +260,6 @@ void logicSystem::handleRequest(std::shared_ptr<httpSession> session){
             _funcMapping[http::verb::post](session); //创建回复报文
             break;
         default:
-            session->_response.clear();
-            session->_response.body().clear();
-            session->_response.result(http::status::bad_request); 
-            session->_response.set(http::field::content_type,"text/plain"); //设置回复报文类型
-            beast::ostream(session->_response.body()) << "Invaild request-method '" //回复错误信息 
-            << std::string(session->_request.method_string()) << "'";
             break;
     }
 }

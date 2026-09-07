@@ -33,7 +33,7 @@ friend class httpSession;
 using CallBack = std::function<void(std::shared_ptr<httpSession>)>;
 public:
     ~logicSystem();
-    void postRequestToQueue(std::shared_ptr<httpSession> session); //将请求投入待处理队列
+    void postRequestToQueue(std::shared_ptr<httpSession> session); //将重请求投入待处理队列
 
 private:
     logicSystem();

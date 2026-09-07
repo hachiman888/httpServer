@@ -14,6 +14,10 @@ find_package(Boost REQUIRED COMPONENTS system)
 # jsoncpp
 find_package(jsoncpp REQUIRED)
 
+# 线程库
+find_package(Threads REQUIRED)
+
+
 # 3. 可执行文件
 add_executable(main
     main.cpp
@@ -36,7 +40,7 @@ target_include_directories(main PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(main
     Boost::system
     jsoncpp
-    pthread
+    Threads::Threads
     profiler
 )
 

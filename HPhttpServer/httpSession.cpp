@@ -79,13 +79,14 @@ void httpSession::processRequest(){
     // 若请求路径为静态，则直接原地发送
     switch(self->_request.method()){
         case http::verb::get:
-            logicSystem::GetInstance()->buildGetResponse(self);
-            self->sendRaw(self->_request.keep_alive());
+        // get方法走新的字节装配路径，字节会被装进session->_sendbuf中
+                logicSystem::GetInstance()->buildGetResponse(self);
+                self->sendRaw(self->_request.keep_alive());
             break;
         case http::verb::post:
             logicSystem::GetInstance()->postRequestToQueue(self);
             break;
-        default:
+        default:    // 错误方法原地拦截，不进入逻辑队列
             self->_response.clear();
             self->_response.body().clear();
             self->_response.result(http::status::bad_request); 
@@ -111,7 +112,7 @@ void httpSession::sendRaw(bool keep_alive){
                 return;
             }
 
-            // 若非长连接
+            // 若非长连接,发送后断开
             if(!keep_alive){
                 beast::error_code ignored;
                 self->_socket.shutdown(tcp::socket::shutdown_send, ignored);
