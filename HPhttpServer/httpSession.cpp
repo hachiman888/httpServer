@@ -80,6 +80,7 @@ void httpSession::processRequest(){
     switch(self->_request.method()){
         case http::verb::get:
         // get方法走新的字节装配路径，字节会被装进session->_sendbuf中
+        // 目前无法区分静态路由和动态路由,待添加判断是否是动态路由的逻辑，如果是，则投递逻辑队列，不是则走静态路由
                 logicSystem::GetInstance()->buildGetResponse(self);
                 self->sendRaw(self->_request.keep_alive());
             break;
@@ -97,6 +98,7 @@ void httpSession::processRequest(){
     }
 }
 
+// Get: 字节已装配在_sendBuf,直接裸发送，绕开beast message + serializer
 void httpSession::sendRaw(bool keep_alive){
     auto self = shared_from_this();
     asio::async_write(_socket,asio::buffer(_sendbuf.data(),_sendbuf.size()),

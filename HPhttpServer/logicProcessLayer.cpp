@@ -108,11 +108,10 @@ logicSystem::logicSystem() : _b_stop(false)
     // 预生成404 响应报文 
     _resp404 = makeStaticResponse("404 Not Found","text/plain","File not found\r\n");
 
-    //for(std::size_t i = 0; i < std::thread::hardware_concurrency();i++){
+    for(std::size_t i = 0; i < std::thread::hardware_concurrency() / 2;i++){
         _worker_threads.emplace_back([this]{
             this->processRequest();});
-        //});
-    //}
+        }
 }
 
 logicSystem::~logicSystem()
@@ -168,6 +167,11 @@ void logicSystem::buildGetResponse(std::shared_ptr<httpSession> session)
     }else{
         out = _resp404;
     }
+}
+
+std::string logicSystem::getInfoFromDB(std::string_view index){
+    // placeholder function...
+    return "";
 }
 
 void logicSystem::postCallBack(std::shared_ptr<httpSession> session)
@@ -236,7 +240,7 @@ void logicSystem::processRequest()
         }
         for(auto& session : local_queue){
             handleRequest(session);
-            writeResponse(session);
+            //writeResponse(session);
         }
         local_queue.clear();
     }    
@@ -249,27 +253,74 @@ void logicSystem::handleRequest(std::shared_ptr<httpSession> session){
     
     switch (session->_request.method())
     {
-        case http::verb::get:
-            buildGetResponse(session); // 此处待修改，应改成重路由消息构建方法
-            break;                      
-        case http::verb::post:
+        case http::verb::get:{
+            // buildGetResponse(session); // 此处待修改，应改成重路由消息构建方法
+        std::string_view index = session->_request.target();
+        session->_sendbuf = getInfoFromDB(index);
+        asio::post(session->_socket.get_executor(),[session]{
+            //TODO
+            // 以下待定
+            session->sendRaw(session->_request.keep_alive());
+        }); 
+
+            break;}                      
+        case http::verb::post:{
             session->_response.clear();  // post方法和其他非法方法也应该绕过ostream，自己写报文模板
             session->_response.body().clear();
             session->_response.result(http::status::ok);
             session->_response.set(http::field::server,"beast");
             _funcMapping[http::verb::post](session); //创建回复报文
-            break;
+
+            bool keep_alive = session->_request.keep_alive();   
+            asio::post(session->_socket.get_executor(),[session,keep_alive]{
+                if (keep_alive){
+                    http::async_write(session->_socket,session->_response,
+                        [session](beast::error_code ec,std::size_t bytes_transferred)
+                        {
+                            if(ec){
+                                // 处理写失败
+                                beast::error_code ignored_ec;
+                                session->_socket.close(ignored_ec);
+                                session->_deadline.cancel();
+                                if (auto server = session->_server.lock()) {
+                                    server->get_shardedSessionManager().remove_shard(session->_uuid);
+                                } //延长server生命周期
+                                return;
+                                }
+                            session->_request.clear();
+                            session->_deadline.expires_after(std::chrono::seconds(60));
+                            //写成功，重置定时器超时时间,并启动
+                            session->start(); // 处理下一个请求
+                        });
+                }
+                else
+                {
+                    http::async_write(session->_socket,session->_response,
+                    [session](beast::error_code ec,std::size_t bytes_transferred){
+                        beast::error_code ignored_ec;
+                        // 1. 发送 FIN 包
+                        session->_socket.shutdown(tcp::socket::shutdown_send, ignored_ec);
+                        // 2. 显式 close 彻底释放 Socket 描述符
+                        session->_socket.close(ec); //发送完成，服务端主动断开连接
+                        session->_deadline.cancel(); //消息处理完毕，中止定时器
+                        if (auto server = session->_server.lock()) { // 防止悬空指针
+                            server->get_shardedSessionManager().remove_shard(session->_uuid);
+                        }
+                    });
+                }
+            });
+            break;}
         default:
             break;
     }
 }
 
+/*
 void logicSystem::writeResponse(std::shared_ptr<httpSession> session)
 {   
-    // Get: 字节已装配在_sendBuf,直接裸发送，绕开beast message + serializer
+    
     if (session->_request.method() == http::verb::get) {
         // keep_alive 必须在 _request 被清空之前判定
-        session->sendRaw(session->_request.keep_alive());
         return;
     }
     // for post/or other
@@ -309,9 +360,10 @@ void logicSystem::writeResponse(std::shared_ptr<httpSession> session)
             });
     }
 }
+*/
 
 //TODO
-// 不应该让读和写处于不同的线程执行，会有不必要的上下文切换,用asio::post或asio::distach
+// worker只处理数据库请求等繁重工作，从队列中取出请求，并行执行操作，然后把待写内容post或dispatch回session所属ioc
 // 给 worker 批量加上限（128），让多个 worker 真正并行消费；更进一步做每 worker 私有队列/无锁队列；
 // 优化定时器
 // 区分动态路径与静态路径，静态直接走模板，动态走逻辑层队列处理

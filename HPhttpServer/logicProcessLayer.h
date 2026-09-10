@@ -39,6 +39,7 @@ private:
     logicSystem();
     void registerCallBacks();
     void buildGetResponse(std::shared_ptr<httpSession> session); // GET 路由分流+装配
+    std::string getInfoFromDB(std::string_view index);
     void postCallBack(std::shared_ptr<httpSession>);
     void processRequest();
     void handleRequest(std::shared_ptr<httpSession>);

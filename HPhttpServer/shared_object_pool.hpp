@@ -66,7 +66,7 @@ namespace ig{
         */
 
         template<typename... Args>
-        [[nodiscard]] std::shared_ptr<ObjectType> Get(Args&&... agrs){
+        [[nodiscard]] std::shared_ptr<ObjectType> Get(Args&&... args){
             std::lock_guard<std::mutex> lock(mutex_);
 
             if(free_queue_.empty()){
@@ -81,7 +81,7 @@ namespace ig{
 
             // 2. 在裸内存上使用placement new进行构造
             // 使用完美转发保证参数属性
-            ObjectType* obj_ptr = ::new(raw_ptr) ObjectType(std::forward<Args>(agrs)...);
+            ObjectType* obj_ptr = ::new(raw_ptr) ObjectType(std::forward<Args>(args)...);
             //std::println("called sharedObjectPool's get...,current queue size:{}",free_queue_.size());
 
             // 3. 返回自定义deleter 的 shared_ptr
@@ -146,13 +146,15 @@ namespace ig{
                 // 使用 ::operator delete[] / ::operator new[] 直接申请裸内存（不调用构造函数）
                 // ::operator new 也只分配内存，不构造对象
                 // 获取连续的复数个ObjectType大小的块，并且内存对齐
+                // 在 C++ 标准中，sizeof(T) 已经包含了编译器为了满足对齐要求而自动添加的尾部填充字节（Trailing Padding）。
+                // 所以不会发生错位
                 primary_block_ = ::operator new[](sizeof(ObjectType) * pool_size, 
                     std::align_val_t{alignof(ObjectType)});
 
-                // 使用char* 指针指向裸内存的首字节
+                // 使用char* 指针指向裸内存的首字节,因为char大小为1字节，天然适合处理无符号字节流,其他的类型不一定合适
                 char* byte_ptr = static_cast<char*>(primary_block_);
                 for(std::size_t i = 0; i < pool_size; i++){
-                    free_queue_.push(static_cast<void*>(byte_ptr + i * sizeof(ObjectType)));    
+                    free_queue_.push(static_cast<void*>(byte_ptr + i * sizeof(ObjectType))); 
                 }
                 capacity_ = pool_size;
             }
@@ -163,7 +165,7 @@ namespace ig{
 
             //  动态分配一块能容纳num个ObjectType的原始内存块
             void* new_block = ::operator new[](sizeof(ObjectType) * num,
-            std::align_val_t{alignof(ObjectType)});
+            std::align_val_t{alignof(ObjectType)}); // C++17,std::align_val_t
             extend_blocks_.push_back(new_block);
 
             char* byte_ptr = static_cast<char*>(new_block);
