@@ -51,7 +51,6 @@ public:
 
     ~httpSession(){
          //std::println("httpSession destructed... uuid: {}", _uuid);
-         //
     }
 
 private:
