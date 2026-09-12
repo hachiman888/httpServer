@@ -3,7 +3,6 @@
 #include "logicProcessLayer.h"
 #include <chrono>
 #include <memory>
-#include <print>
 #include <iostream>
 #include <boost/asio.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -14,11 +13,13 @@
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/beast/version.hpp>
+
 namespace beast = boost::beast;
 namespace http = beast::http;
 namespace asio = boost::asio;
 namespace ip = asio::ip;
 using tcp = ip::tcp;
+
 
 class httpServer;
 class logicSystem;
@@ -52,6 +53,11 @@ public:
     ~httpSession(){
          //std::println("httpSession destructed... uuid: {}", _uuid);
     }
+
+//TODO
+// 修正session类的成员组成，不应该直接持有socket
+// 应采取boost官方推荐的写法
+// 写法详见官方仓库 
 
 private:
     tcp::socket _socket;                        //存储用于通信的socket
