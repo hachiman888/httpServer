@@ -1,6 +1,6 @@
 # Build artifacts
 /build/
 .vscode/
-HPhttpServer/sslServerRef.cpp/
-HPhttpServer/test2.cpp/
-HPhttpServer/test2/
+HPhttpServer/sslServerRef.cpp
+HPhttpServer/test2
+HPhttpServer/test2.cpp
