@@ -94,6 +94,18 @@ void httpSession::processRequest(){
             self->_response.set(http::field::content_type,"text/plain"); //设置回复报文类型
             beast::ostream(self->_response.body()) << "Invaild request-method '" //回复错误信息 
             << std::string(self->_request.method_string()) << "'";
+            http::async_write(self->_socket,self->_response,
+                [self](beast::error_code ec,std::size_t bytes_transferred){
+                        beast::error_code ignored_ec;
+                        // 1. 发送 FIN 包
+                        self->_socket.shutdown(tcp::socket::shutdown_send, ignored_ec);
+                        // 2. 显式 close 彻底释放 Socket 描述符
+                        self->_socket.close(ec); //发送完成，服务端主动断开连接
+                        self->_deadline.cancel(); //消息处理完毕，中止定时器
+                        if (auto server = self->_server.lock()) { // 防止悬空指针
+                            server->get_shardedSessionManager().remove_shard(self->_uuid);
+                        }
+                    });
             break;
     }
 }

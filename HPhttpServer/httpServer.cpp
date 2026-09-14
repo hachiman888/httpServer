@@ -87,6 +87,7 @@ void httpServer::handle_Accept(std::shared_ptr<httpSession> new_Session,
     if(ec){
         std::cerr << "accept error occurred...\terror code is " << ec.value()
             << "error message: " << ec.what();
+        do_Accept();
         return;
         // 正常服务器需要即使在错误发生时，也要持续监听
     }

@@ -59,7 +59,7 @@ namespace{
         r.reserve(160 + body.size());
 
         // 拼接协议版本前缀
-        r.append("HTTP/1.1");
+        r.append("HTTP/1.1 "); // 避免HTTP/1.1和status粘连，需要添加空格
 
         // 拼接http状态码及状态描述
         r.append(status);
