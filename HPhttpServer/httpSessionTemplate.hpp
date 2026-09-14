@@ -18,6 +18,44 @@ namespace ip = asio::ip;
 namespace ssl = asio::ssl;
 using tcp = ip::tcp;
 
+ // 生成 400 Bad Request 响应的函数
+static inline const auto bad_request = []
+    (std::string_view why,auto& req)
+    {
+        http::response<http::string_body> res{http::status::bad_request,req.version()};
+        res.set(http::field::server,BOOST_BEAST_VERSION_STRING);
+        res.set(http::field::content_type,"text/html");
+        res.keep_alive(req.keep_alive());
+        res.body() = std::string(why);
+        res.prepare_payload();
+        return res;
+    };
+
+// 生成 404 Not Found 响应的函数
+static inline const auto not_found =
+    [](std::string_view target,auto& req)
+    {
+        http::response<http::string_body> res{http::status::not_found, req.version()};
+        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+        res.set(http::field::content_type, "text/html");
+        res.keep_alive(req.keep_alive());
+        res.body() = "The resource '" + std::string(target) + "' was not found.";
+        res.prepare_payload();
+        return res;
+    };
+
+// 生成 500 Internal Server Error 响应的函数
+static inline const auto server_error =
+    [](std::string_view what,auto& req)
+    {
+        http::response<http::string_body> res{http::status::internal_server_error, req.version()};
+        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+        res.set(http::field::content_type, "text/html");
+        res.keep_alive(req.keep_alive());
+        res.body() = "An error occurred: '" + std::string(what) + "'";
+        res.prepare_payload();
+        return res;
+    };
 
 // 辅助函数 1：根据文件扩展名返回对应的 MIME 类型（用于设置 HTTP Content-Type）
 beast::string_view mime_type(beast::string_view path)
@@ -80,61 +118,26 @@ std::string path_cat(beast::string_view base,
 
 // 业务核心函数：处理客户端发来的 HTTP 请求并生成相应的 Response 报文
 // message_generator 是 Beast 提供的类型擦除包装器，可统一返回不同 Body 类型的 Response
+// TODO
+// 每请求都打开关闭某个文件，path_cat 字符串构造、mime 比较、message_generator 堆分配，形成瓶颈
+// 给静态文件做内存缓存（启动时读进 std::string，或缓存 fd），
+// 热路由回复预拼装成字节（就是把 main 里 assemble() 那套 reserve + to_chars 搬过来）。
 template<class Body,class Allocator>
 http::message_generator handle_request(
     std::string_view doc_root,
     http::request<Body,http::basic_fields<Allocator>>&& req)    
 {
-    // 生成 400 Bad Request 响应的函数
-    const auto bad_request = [&req]
-    (std::string_view why)
-    {
-        http::response<http::string_body> res{http::status::bad_request,req.version()};
-        res.set(http::field::server,BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type,"text/html");
-        res.keep_alive(req.keep_alive());
-        res.body() = std::string(why);
-        res.prepare_payload();
-        return res;
-    };
-
-    // 生成 404 Not Found 响应的函数
-    const auto not_found =
-    [&req](std::string_view target)
-    {
-        http::response<http::string_body> res{http::status::not_found, req.version()};
-        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, "text/html");
-        res.keep_alive(req.keep_alive());
-        res.body() = "The resource '" + std::string(target) + "' was not found.";
-        res.prepare_payload();
-        return res;
-    };
-
-    // 生成 500 Internal Server Error 响应的函数
-    auto const server_error =
-    [&req](std::string_view what)
-    {
-        http::response<http::string_body> res{http::status::internal_server_error, req.version()};
-        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, "text/html");
-        res.keep_alive(req.keep_alive());
-        res.body() = "An error occurred: '" + std::string(what) + "'";
-        res.prepare_payload();
-        return res;
-    };
-
     // 检验1： 只支持GET,HEAD,和POST方法
     if( req.method() != http::verb::get &&
         req.method() != http::verb::head &&
         req.method() != http::verb::post)
-        return bad_request("Unknown HTTP-method");
+        return bad_request("Unknown HTTP-method",req);
 
     // 检验2：请求路径合法性安全检查(防止路径穿越攻击，如 GET /../etc/passwd)
     if( req.target().empty() ||
         req.target()[0] != '/' ||
         req.target().find("..") != beast::string_view::npos)
-        return bad_request("Illegal request-target");
+        return bad_request("Illegal request-target",req);
 
     // 构建本地文件的绝对路径；若访问根目录，默认指向 index.html
     std::string path = path_cat(doc_root, req.target());
@@ -148,11 +151,11 @@ http::message_generator handle_request(
 
     // 处理文件不存在的情况 (404)
     if(ec == beast::errc::no_such_file_or_directory)
-        return not_found(req.target());
+        return not_found(req.target(),req);
 
     // 处理其他系统读取错误 (500)
     if(ec)
-        return server_error(ec.message());
+        return server_error(ec.message(),req);
 
     // 缓存文件体积大小
     auto const size = body.size();

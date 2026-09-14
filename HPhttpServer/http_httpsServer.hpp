@@ -69,7 +69,6 @@ public:
     
 private:
     void do_accept(){
-        // 待接入对象池
         // std::cout << "start to accept... " << "\n";
         auto& ioc = IOServicePool::GetInstance()->GetIOService();
         acceptor_.async_accept(ioc,beast::bind_front_handler(
@@ -83,11 +82,13 @@ private:
         }
 
         if constexpr(is_ssl_stream_v<StreamType>){
+            auto& objPool = ig::sharedObjectPool<https_session>::getInstance();
             asio::ssl::stream<beast::tcp_stream> stream(std::move(socket),ctx_);
-            std::make_shared<https_session>(std::move(stream),doc_root_)->run();
+            objPool.Get(std::move(stream),doc_root_)->run();
         }else{
+            auto& objPool = ig::sharedObjectPool<http_session>::getInstance();
             beast::tcp_stream stream(std::move(socket));
-            std::make_shared<http_session>(std::move(stream),doc_root_)->run();
+            objPool.Get(std::move(stream),doc_root_)->run();
         }
         // std::cout << "finished accepting... " << "\n";
         do_accept();
