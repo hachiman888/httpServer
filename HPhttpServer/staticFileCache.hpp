@@ -78,22 +78,13 @@ constexpr std::array<MimeEntry,20> mime_table =
     { ".xml",   "application/xml" }
 }};
 
-// 忽略大小写的string_view辅助比较函数
-inline bool iequals(std::string_view lhs,std::string_view rhs) noexcept {
-    // 字长不一致，直接返回false
-    if(lhs.size() != rhs.size()) return false;
-
-    // 逐字节比较，若有某个字节不一致，直接返回false
-    for(size_t i = 0; i < lhs.size(); ++i){
-        if(std::tolower(static_cast<unsigned char>(lhs[i])) 
-        != std::tolower(static_cast<unsigned char>(rhs[i])))
-        {
-            return false;
-        }
-    }
-    // 一致，返回true
-    return true;
+inline char ascii_tolower(char c) noexcept {
+    // ASCII 中，大写字母 'A'-'Z' (0x41-0x5A) 的第 5 位(0x20)是 0
+    // 小写字母 'a'-'z' (0x61-0x7A) 的第 5 位(0x20)是 1
+    // 只有在 'A' <= c && c <= 'Z' 时按位或 0x20，其它字符保持原样
+    return (c >= 'A' && c <= 'Z') ? (c | 0x20) : c;
 }
+
 
 // ----------------------------------------------------------------------------
 // 扩展名 → MIME 类型
@@ -109,15 +100,14 @@ inline std::string_view mime_type_of(std::string_view path) noexcept
 
     // 获取 . 后拓展名
     std::string_view raw_ext = path.substr(dot);
-    if(raw_ext.size() > 16) {
+    if(raw_ext.empty() || raw_ext.size() > 16) {
         return "application/octet-stream";
     }
 
-    // 栈内存分配获得拓展名的小写
+    // 栈内存分配,预存拓展名的小写
     char ext_buf[16];
     for(size_t i = 0; i < raw_ext.size(); ++i){
-        ext_buf[i] = static_cast<char>(
-            std::tolower(static_cast<unsigned char>(raw_ext[i])));
+        ext_buf[i] = ascii_tolower(raw_ext[i]);
     }
     std::string_view ext{ext_buf,raw_ext.size()};
 
@@ -155,6 +145,7 @@ public:
     static constexpr std::size_t kDefaultMaxFileSize  = 8u * 1024u * 1024u;    // 单文件上限 8 MiB
     static constexpr std::size_t kDefaultMaxTotalSize = 256u * 1024u * 1024u;  // 总缓存上限 256 MiB
 
+    // 预存根目录地址，配置单文件上限，配置总缓存上限
     explicit staticFileCache(std::string doc_root,
                              std::size_t max_file_size  = kDefaultMaxFileSize,
                              std::size_t max_total_size = kDefaultMaxTotalSize)
