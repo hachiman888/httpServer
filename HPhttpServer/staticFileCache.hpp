@@ -221,14 +221,18 @@ private:
     //    find() 返回的就是指向这里元素的指针。
     std::deque<Entry> files_;
 
-    // URL 路径 → files_ 的下标。用下标而不是 Entry*，是为了让一个文件可以有多个别名
+    // URL 路径 → files_ 容器的下标映射。用下标而不是 Entry*，是为了让一个文件可以有多个别名
     // （"/" 和 "/index.html" 都指向同一份内容，不重复占内存）。
+
+    // std::equal_to<>（空模板参数形式，也称 std::equal_to<void>）
+    // 在 C++14/17 中主要用来配合自定义哈希函数 transparent_hash 开启
+    // 哈希表的异构查找功能
     std::unordered_map<std::string, std::size_t, transparent_hash, std::equal_to<>> index_;
 
     // 存在于磁盘但没进缓存的路径（值 = 文件大小，仅用于日志）
     std::unordered_map<std::string, std::size_t, transparent_hash, std::equal_to<>> skipped_;
 
-    std::size_t loaded_bytes_ = 0;
+    std::size_t loaded_bytes_ = 0; // 记录当前已缓存大小
 };
 
 // ----------------------------------------------------------------------------
@@ -258,6 +262,8 @@ inline void staticFileCache::add_alias(std::string url, std::size_t file_index)
 inline void staticFileCache::build_headers(Entry& e, std::string_view content_type) const
 {
     char nbuf[20];   // uint64 最多 20 位十进制；文件大小用不到这么多，够用
+    // 在 C++ 中，允许指向数组末尾元素之后的那一个位置（即 past-the-end 指针）
+    // std::to_chars 的前两个参数采用的是 C++ 标准库非常统一的 [first, last) 左闭右开区间 语义
     const char* const nend = std::to_chars(nbuf, nbuf + sizeof(nbuf),
                                           static_cast<std::uint64_t>(e.body.size())).ptr;
 
@@ -309,16 +315,16 @@ inline void staticFileCache::load()
             break;
         }
 
-        // 只要普通文件（soft link 指向普通文件也会被 is_regular_file 判为 true，
-        // 这与旧代码 path_cat + open() 的行为一致）
+        // 只要普通文件 (soft link 指向普通文件也会被 is_regular_file 判为 true)
         if (!dir_entry.is_regular_file(ec)) {
             continue;
         }
 
         const auto size = static_cast<std::size_t>(dir_entry.file_size(ec));
 
-        // 相对路径 → URL 路径：统一分隔符为 '/'，前面补一个 '/'
-        // generic_string() 在 Windows 上也会把 '\' 换成 '/'
+        // 相对路径 → HTTP 规范的URL 路径：统一分隔符为 '/'，前面补一个 '/'
+        // generic_string() 在 Windows 上也会把 '\' 换成 '/',用于消除平台差异
+        // fs::relative 用来计算相对路径
         std::string url = "/" + fs::relative(dir_entry.path(), doc_root_, ec).generic_string();
         if (ec || url.empty()) {
             ec.clear();
@@ -341,6 +347,7 @@ inline void staticFileCache::load()
         // ---- 读文件 ----
         std::ifstream in(dir_entry.path(), std::ios::binary);
         if (!in) {
+            // 打开失败，则丢到异构哈希表里
             skipped_.emplace(url, size);
             continue;
         }
@@ -358,18 +365,21 @@ inline void staticFileCache::load()
 
         loaded_bytes_ += e.body.size();
 
+        // idx表示已缓存的文件在deque中的索引下标
         const std::size_t idx = files_.size();
         files_.push_back(std::move(e));
 
-        // 注册 URL → 下标
+        // 注册 URL → deque下标的映射
         add_alias(url, idx);
 
         // 目录别名：/sub/index.html 额外登记成 "/sub/" 和 "/sub"
-        //（旧代码是靠 path_cat + 追加 "index.html" 在运行时做的，
-        //  放到启动期做，热路径就不用再拼字符串了）
+        //  放到启动期做，热路径就不用再拼字符串
         constexpr std::string_view kIndex = "/index.html";
+        // 判断当前url（相对路径）是否为 index.html
         if (url.size() >= kIndex.size() &&
             std::string_view(url).substr(url.size() - kIndex.size()) == kIndex)
+        // 只要 URL 是以 /index.html 结尾的（比如 /index.html 或 /sub/admin/index.html），
+        // 就会触发内部的“目录别名生成”逻辑
         {
             std::string dir = url.substr(0, url.size() - kIndex.size());   // "/sub" 或 ""
             if (dir.empty()) {
