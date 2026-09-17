@@ -145,8 +145,10 @@ http::message_generator handle_request(
         path.append("index.html");
 
     // 尝试打开目标静态文件
+    // 此处待修改成访问服务器缓存
     beast::error_code ec;
     http::file_body::value_type body;
+    // http::string_body::value_type s_body;
     body.open(path.c_str(), beast::file_mode::scan, ec);
 
     // 处理文件不存在的情况 (404)
