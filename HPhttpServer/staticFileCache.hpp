@@ -153,7 +153,10 @@ public:
           max_file_size_(max_file_size),
           max_total_size_(max_total_size)
     {}
-
+    
+    ~staticFileCache(){
+        std::cout << "staticFileCache destructed..." << "\n";
+    }
     // ------------------------------------------------------------------
     // 启动期扫描 + 读盘。必须在起线程之前、单线程调用一次。
     // load() 返回之后本对象只读：find() 可以随便并发调用，不需要锁。
@@ -237,6 +240,7 @@ private:
 
 // ----------------------------------------------------------------------------
 // 注册一个 URL → 文件下标 的映射；已存在则不覆盖（先注册的优先）
+// 相对路径 -> 文件下标 的映射
 // ----------------------------------------------------------------------------
 inline void staticFileCache::add_alias(std::string url, std::size_t file_index)
 {
