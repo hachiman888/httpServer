@@ -63,11 +63,6 @@ set(HP_HEADERS
     shared_object_pool.hpp
 )
 
-# 说明：以下文件有意不加入本 target
-#   httpSessionTemplate.hpp / http_httpsServer.hpp : https 分支的模板实现，尚未接入
-#   sslServerRef.cpp : boost 官方例子参考代码，依赖外部 example/common/server_certificate.hpp
-#   test.cpp / test2.cpp : 各自带 main()，需单独建 target，不能与 main.cpp 同 target
-
 add_executable(main ${HP_SOURCES} ${HP_HEADERS})
 
 # 4. 头文件路径
