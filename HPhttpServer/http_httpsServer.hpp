@@ -1,3 +1,5 @@
+#pragma once
+
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/beast/core.hpp>
@@ -7,8 +9,10 @@
 #include <string>
 #include "httpSessionTemplate.hpp"
 #include "shared_object_pool.hpp"
+#include "staticFileCache.hpp"
 #include "IOServicePool.h"
 
+namespace beast = boost::beast;
 namespace asio = boost::asio;
 namespace ssl = asio::ssl;
 namespace ip = asio::ip;
@@ -21,6 +25,7 @@ class Server : public std::enable_shared_from_this<Server<StreamType>>
     ssl::context& ctx_;
     tcp::acceptor acceptor_;
     std::shared_ptr<const std::string>doc_root_;
+    hp::staticFileCache fileCache_;
 
 public:
     Server(asio::io_context& ioc,
@@ -31,7 +36,10 @@ public:
            ,ctx_(ctx)
            ,acceptor_(ioc) // 1. 先只绑定 io_context，不立即 open/bind
            ,doc_root_(doc_root)
-    {
+           ,fileCache_(doc_root->data())
+    {   
+        // 服务器加载缓存
+        fileCache_.load();
         // 分步操作更安全
         beast::error_code ec;
 
@@ -84,11 +92,11 @@ private:
         if constexpr(is_ssl_stream_v<StreamType>){
             auto& objPool = ig::sharedObjectPool<https_session>::getInstance();
             asio::ssl::stream<beast::tcp_stream> stream(std::move(socket),ctx_);
-            objPool.Get(std::move(stream),doc_root_)->run();
+            objPool.Get(std::move(stream),doc_root_,fileCache_)->run();
         }else{
             auto& objPool = ig::sharedObjectPool<http_session>::getInstance();
             beast::tcp_stream stream(std::move(socket));
-            objPool.Get(std::move(stream),doc_root_)->run();
+            objPool.Get(std::move(stream),doc_root_,fileCache_)->run();
         }
         // std::cout << "finished accepting... " << "\n";
         do_accept();
