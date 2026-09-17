@@ -1,6 +1,7 @@
 #pragma once
-#include "httpServer.h"
+
 #include "logicProcessLayer.h"
+#include "staticFileCache.hpp"
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <jsoncpp/json/json.h>
@@ -9,7 +10,9 @@
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/beast/version.hpp>
+#include <variant>
 #include <memory>
+#include <type_traits>
 
 namespace beast = boost::beast;
 namespace http = beast::http;
@@ -57,42 +60,7 @@ static inline const auto server_error =
         return res;
     };
 
-// 辅助函数 1：根据文件扩展名返回对应的 MIME 类型（用于设置 HTTP Content-Type）
-beast::string_view mime_type(beast::string_view path)
-{
-    using beast::iequals;
-    auto const ext = [&path]
-    {
-        auto const pos = path.rfind(".");
-        if(pos == beast::string_view::npos)
-            return beast::string_view{};
-        return path.substr(pos);
-    }();
-    if(iequals(ext, ".htm"))  return "text/html";
-    if(iequals(ext, ".html")) return "text/html";
-    if(iequals(ext, ".php"))  return "text/html";
-    if(iequals(ext, ".css"))  return "text/css";
-    if(iequals(ext, ".txt"))  return "text/plain";
-    if(iequals(ext, ".js"))   return "application/javascript";
-    if(iequals(ext, ".json")) return "application/json";
-    if(iequals(ext, ".xml"))  return "application/xml";
-    if(iequals(ext, ".swf"))  return "application/x-shockwave-flash";
-    if(iequals(ext, ".flv"))  return "video/x-flv";
-    if(iequals(ext, ".png"))  return "image/png";
-    if(iequals(ext, ".jpe"))  return "image/jpeg";
-    if(iequals(ext, ".jpeg")) return "image/jpeg";
-    if(iequals(ext, ".jpg"))  return "image/jpeg";
-    if(iequals(ext, ".gif"))  return "image/gif";
-    if(iequals(ext, ".bmp"))  return "image/bmp";
-    if(iequals(ext, ".ico"))  return "image/vnd.microsoft.icon";
-    if(iequals(ext, ".tiff")) return "image/tiff";
-    if(iequals(ext, ".tif"))  return "image/tiff";
-    if(iequals(ext, ".svg"))  return "image/svg+xml";
-    if(iequals(ext, ".svgz")) return "image/svg+xml";
-    return "application/octet-stream";
-}
-
-// 辅助函数 2：拼接根目录路径与客户端请求的相对路径，并处理跨平台路径分隔符（Windows '\' vs Linux '/'）
+// 辅助函数 ：拼接根目录路径与客户端请求的相对路径，并处理跨平台路径分隔符（Windows '\' vs Linux '/'）
 std::string path_cat(beast::string_view base,
     beast::string_view path)
 {
@@ -116,16 +84,13 @@ std::string path_cat(beast::string_view base,
     return result;
 }
 
-// 业务核心函数：处理客户端发来的 HTTP 请求并生成相应的 Response 报文
+// 处理客户端发来的 HTTP 请求时，未命中文件缓存,则走这个路径，生成相应的 Response 报文
 // message_generator 是 Beast 提供的类型擦除包装器，可统一返回不同 Body 类型的 Response
-// TODO
-// 每请求都打开关闭某个文件，path_cat 字符串构造、mime 比较、message_generator 堆分配，形成瓶颈
-// 给静态文件做内存缓存（启动时读进 std::string，或缓存 fd），
-// 热路由回复预拼装成字节（就是把 main 里 assemble() 那套 reserve + to_chars 搬过来）。
 template<class Body,class Allocator>
-http::message_generator handle_request(
+std::variant<std::string,http::message_generator> handle_request(
     std::string_view doc_root,
-    http::request<Body,http::basic_fields<Allocator>>&& req)    
+    http::request<Body,http::basic_fields<Allocator>>&& req,
+    const hp::staticFileCache& fileCache)    
 {
     // 检验1： 只支持GET,HEAD,和POST方法
     if( req.method() != http::verb::get &&
@@ -139,8 +104,25 @@ http::message_generator handle_request(
         req.target().find("..") != beast::string_view::npos)
         return bad_request("Illegal request-target",req);
 
+    // 判断文件缓存是否命中，未命中才走旧流程
+    auto target = req.target();
+    if(auto entry = fileCache.find(target);entry != nullptr)
+    {   
+        // std::cout << "缓存命中..." << std::endl;
+        std::string response;
+        if(req.keep_alive()){
+            response.reserve(entry->head_keep_alive.size() + entry->body.size());
+            response.append(entry->head_keep_alive);
+        }else{
+            response.reserve(entry->head_close.size() + entry->body.size());
+            response.append(entry->head_close);
+        }
+        response.append(entry->body);
+        return response;
+    }    
+
     // 构建本地文件的绝对路径；若访问根目录，默认指向 index.html
-    std::string path = path_cat(doc_root, req.target());
+    std::string path = path_cat(doc_root, target);
     if(req.target().back() == '/')
         path.append("index.html");
 
@@ -148,7 +130,6 @@ http::message_generator handle_request(
     // 此处待修改成访问服务器缓存
     beast::error_code ec;
     http::file_body::value_type body;
-    // http::string_body::value_type s_body;
     body.open(path.c_str(), beast::file_mode::scan, ec);
 
     // 处理文件不存在的情况 (404)
@@ -167,7 +148,7 @@ http::message_generator handle_request(
     {
         http::response<http::empty_body> res{http::status::ok, req.version()};
         res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, mime_type(path));
+        res.set(http::field::content_type, hp::mime_type_of(path));
         res.content_length(size);
         res.keep_alive(req.keep_alive());
         return res;
@@ -187,7 +168,7 @@ http::message_generator handle_request(
         std::make_tuple(std::move(body)),
         std::make_tuple(http::status::ok, req.version())};
     res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-    res.set(http::field::content_type, mime_type(path));
+    res.set(http::field::content_type, hp::mime_type_of(path));
     res.content_length(size);
     res.keep_alive(req.keep_alive());
     return res;
@@ -211,12 +192,15 @@ class Session : public std::enable_shared_from_this<Session<Stream>>
     beast::flat_buffer buffer_;
     http::request<http::string_body> request_;
     std::shared_ptr<std::string const> doc_root_;
+    const hp::staticFileCache& cache_;
     
 public:
     explicit Session(Stream stream,
-        std::shared_ptr<std::string const> const& doc_root) 
-        : stream_(std::move(stream)),
-          doc_root_(doc_root)
+                     std::shared_ptr<std::string const> const& doc_root,
+                     const hp::staticFileCache& file_cache) 
+        : stream_(std::move(stream))
+          ,doc_root_(doc_root)
+          ,cache_(file_cache)
         {}
 
     void run()
@@ -274,19 +258,39 @@ public:
 
         // 无事发生，则继续执行
         do_write(
-            handle_request(*doc_root_,std::move(request_)));
+            handle_request(*doc_root_,std::move(request_),cache_));
     }
 
-    void do_write(http::message_generator&& msg)
-    {
-        bool keep_alive = msg.keep_alive();
+    void do_write(std::variant<std::string,http::message_generator>&& msg)
+    {   
+       // 使用std::vist 搭配完美转发，保证msg属性
+       std::visit([this](auto&& arg){
+        // 类型萃取
+        using T = std::decay_t<decltype(arg)>;
 
-        // 用beast的异步写
-        beast::async_write(stream_,std::move(msg),
-            beast::bind_front_handler(
-                &Session::on_write,
-                this->shared_from_this(),
-                keep_alive));
+        if constexpr (std::is_same_v<T,http::message_generator>){
+            // arg 的类型此时就是 http::message_generator&
+            //（如果外层传了 move，这里就是&&）
+            bool keep_alive = arg.keep_alive();
+            
+            // beast
+            beast::async_write(stream_, std::move(arg),
+                beast::bind_front_handler(
+                    &Session::on_write,
+                    this->shared_from_this(),
+                    keep_alive));
+        }
+        else if constexpr(std::is_same_v<T,std::string>){
+            bool keep_alive = request_.keep_alive();
+
+            // asio
+             asio::async_write(stream_, asio::buffer(arg.data(),arg.size()),
+                beast::bind_front_handler(
+                    &Session::on_write,
+                    this->shared_from_this(),
+                    keep_alive));
+        }
+       },std::move(msg));
     }
 
     void on_write(bool keep_alive,beast::error_code ec,
