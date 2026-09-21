@@ -82,10 +82,14 @@ private:
         acceptor_.async_accept(ioc,beast::bind_front_handler(
             &Server::on_accept,this->shared_from_this()
         ));
+        // 前向绑定器，绑定函数最前面n个参数,从左至右填入
+        // 运行时，将产生的参数追加在参数列表后面
+        // 类似于std::bind(ph1,ph2,ec,...)
     }
 
     void on_accept(beast::error_code ec,tcp::socket socket){
         if(ec){
+            // 待报错
             return;
         }
 

@@ -4,9 +4,6 @@
 #include "staticFileCache.hpp"
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
-#include <jsoncpp/json/json.h>
-#include <jsoncpp/json/value.h>
-#include <jsoncpp/json/reader.h>
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/beast/version.hpp>
@@ -94,8 +91,7 @@ std::variant<std::string,http::message_generator> handle_request(
 {
     // 检验1： 只支持GET,HEAD,和POST方法
     if( req.method() != http::verb::get &&
-        req.method() != http::verb::head &&
-        req.method() != http::verb::post)
+        req.method() != http::verb::head &&)
         return bad_request("Unknown HTTP-method",req);
 
     // 检验2：请求路径合法性安全检查(防止路径穿越攻击，如 GET /../etc/passwd)
@@ -154,7 +150,7 @@ std::variant<std::string,http::message_generator> handle_request(
         return res;
     }
 
-    // 暂定
+    // 静态文件转发服务器，禁用post
     /*
     if(req.method() == http::verb::post)
     {
@@ -224,6 +220,7 @@ public:
             stream_.async_handshake(ssl::stream_base::server,
                 [self](beast::error_code ec){
                     if(ec) {
+                        // 待报错
                         return;
                     }
                     self->do_read();
@@ -253,6 +250,7 @@ public:
         }
 
         if(ec){
+            // 待报错
             return;
         }
 
@@ -265,7 +263,8 @@ public:
     {   
        // 使用std::vist 搭配完美转发，保证msg属性
        std::visit([this](auto&& arg){
-        // 类型萃取
+        // arg会自动获取msg中的类型的引用（左/右）
+        // 类型萃取,剥离&或&&，获得裸类型
         using T = std::decay_t<decltype(arg)>;
 
         if constexpr (std::is_same_v<T,http::message_generator>){
@@ -298,6 +297,7 @@ public:
     {
         boost::ignore_unused(bytes_transferred);
         if(ec){
+            // 待报错
             return;
         }
 
@@ -321,7 +321,10 @@ public:
             auto self = this->shared_from_this();
             stream_.async_shutdown([self](beast::error_code ec)
             {
-                if(ec){ return; }
+                if(ec){
+                    // 待报错 
+                    return; 
+                }
             });
         }else{
             beast::get_lowest_layer(stream_).socket().shutdown(tcp::socket::shutdown_both, ec);
