@@ -4,3 +4,5 @@
 HPhttpServer/sslServerRef.cpp
 HPhttpServer/test2
 HPhttpServer/test2.cpp
+HPhttpServer/test3
+HPhttpServer/test3.cpp
