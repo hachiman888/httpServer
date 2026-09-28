@@ -10,6 +10,8 @@
 #include <variant>
 #include <memory>
 #include <type_traits>
+#include <array>      // response_view 里的 std::array<asio::const_buffer,2>
+#include <cstddef>    // std::size_t
 
 namespace beast = boost::beast;
 namespace http = beast::http;
@@ -81,10 +83,51 @@ std::string path_cat(beast::string_view base,
     return result;
 }
 
+// ============================================================================
+//  【改动 A-1】新增 response_view —— 缓存命中的响应用"两段 buffer 的视图"表示
+// ----------------------------------------------------------------------------
+//  为什么要这个类型：
+//    缓存命中时，响应其实是两块**已经存在于内存里、且不会变**的字节：
+//        [0] 启动期预拼好的响应头（staticFileCache::Entry::head_keep_alive / head_close）
+//        [1] 文件内容本体（staticFileCache::Entry::body）
+//    旧写法是新建一个 std::string，把头、体全量拷进去再发送 ——
+//    每请求一次 malloc + 一次全量 body 的 memcpy（文件越大，这笔拷贝越是主导开销）。
+//
+//  这个类型只存**指针**，不存字节：拷贝它等于拷贝两个 (ptr,size) 对，零开销。
+//  配合下面的 do_write，asio 会把这两段用一次 sendmsg（msg_iov 聚集写，等价于 writev）
+//  发出去 —— 仍然只是一个系统调用，且不拷贝 body。
+//
+//  两个必须记住的点：
+//    1) 生命周期：它指向的内存必须活到异步写完成。这里指向的是 staticFileCache
+//       里的常驻内容（进程级生命期），所以天然安全；
+//       —— 这一点正是旧 std::string 版本的隐患所在，见下面 do_write 里的说明。
+//    2) 它只对"内容固定"的响应成立。动态生成的响应（要现场拼数字/时间的）不适用，
+//       那种情况应该用一块可复用的 session 缓冲区（clear() 保留 capacity 的写法）。
+// ============================================================================
+struct response_view
+{
+    // 最多两段：头 + 体。HEAD 请求时只发头（count = 1）
+    std::array<asio::const_buffer, 2> bufs{};
+    std::size_t count = 0;
+
+    // 下面这两个 begin/end 让 response_view 自身满足 asio 的 ConstBufferSequence 概念，
+    // 于是可以直接 asio::async_write(stream, view, handler)，
+    // 不用再拼 asio::buffer(...)（asio 也没有 "const_buffer* + 个数" 这种重载）。
+    [[nodiscard]] const asio::const_buffer* begin() const noexcept { return bufs.data(); }
+    [[nodiscard]] const asio::const_buffer* end()   const noexcept { return bufs.data() + count; }
+
+    // 惯用的 typedef，让 asio 的 buffer 序列萃取能正常工作
+    using value_type = asio::const_buffer;
+};
+
 // 处理客户端发来的 HTTP 请求时，未命中文件缓存,则走这个路径，生成相应的 Response 报文
 // message_generator 是 Beast 提供的类型擦除包装器，可统一返回不同 Body 类型的 Response
+//
+// 【改动 A-2】返回类型里原来的 std::string 变成了 response_view：
+//   现在"缓存命中"不再构造字符串，而是返回一个指向缓存内容的视图（零拷贝、零分配）；
+//   其余所有分支仍然返回 beast 的 response，会隐式转成 message_generator 这个备选类型。
 template<class Body,class Allocator>
-std::variant<std::string,http::message_generator> handle_request(
+std::variant<response_view,http::message_generator> handle_request(
     std::string_view doc_root,
     http::request<Body,http::basic_fields<Allocator>>&& req,
     const hp::staticFileCache& fileCache)    
@@ -105,16 +148,27 @@ std::variant<std::string,http::message_generator> handle_request(
     if(auto entry = fileCache.find(target);entry != nullptr)
     {   
         // std::cout << "缓存命中..." << std::endl;
-        std::string response;
-        if(req.keep_alive()){
-            response.reserve(entry->head_keep_alive.size() + entry->body.size());
-            response.append(entry->head_keep_alive);
-        }else{
-            response.reserve(entry->head_close.size() + entry->body.size());
-            response.append(entry->head_close);
-        }
-        response.append(entry->body);
-        return response;
+
+        // 【改动 A-3】命中后不再拼接字符串，而是把"预拼好的响应头"和"文件内容"
+        // 各自作为一个 const_buffer 指出去：
+        //   * 两块内存都属于 staticFileCache::Entry，进程级生命期，写的时候一定还在；
+        //   * 不 malloc、不 memcpy，拷贝的只是两个 (指针,长度) 对。
+        const std::string& head = req.keep_alive()
+                                ? entry->head_keep_alive
+                                : entry->head_close;
+
+        response_view view;
+        // asio::buffer 本质上就是一个轻量级的内存视图（View）
+        view.bufs[0] = asio::buffer(head);         // 第一段：响应头
+        view.bufs[1] = asio::buffer(entry->body);  // 第二段：文件内容
+
+        // HEAD 只发响应头（count = 1）。Content-Length 仍然是文件的真实大小，
+        // 这是 RFC 要求的：HEAD 的 Content-Length 表示"如果发 GET 会收到多少字节"。
+        // 注意：这里如果不区分 HEAD，body 会被一起发出去，长连接下客户端会把
+        //       下一段响应的字节当成这个 body 来解析，整条连接的报文就错位了。
+        view.count = (req.method() == http::verb::head) ? 1u : 2u;
+
+        return view;
     }    
 
     // 构建本地文件的绝对路径；若访问根目录，默认指向 index.html
@@ -259,7 +313,8 @@ public:
             handle_request(*doc_root_,std::move(request_),cache_));
     }
 
-    void do_write(std::variant<std::string,http::message_generator>&& msg)
+    // 【改动 A-4】形参类型跟着 handle_request 的返回类型走：string -> response_view
+    void do_write(std::variant<response_view,http::message_generator>&& msg)
     {   
        // 使用std::vist 搭配完美转发，保证msg属性
        std::visit([this](auto&& arg){
@@ -272,18 +327,37 @@ public:
             //（如果外层传了 move，这里就是&&）
             bool keep_alive = arg.keep_alive();
             
-            // beast
+            // 需要用beast的异步写
             beast::async_write(stream_, std::move(arg),
                 beast::bind_front_handler(
                     &Session::on_write,
                     this->shared_from_this(),
                     keep_alive));
         }
-        else if constexpr(std::is_same_v<T,std::string>){
+        else if constexpr(std::is_same_v<T,response_view>){
+            // 长短连接由请求决定（这里 request_ 还是本次请求，没被下一次读覆盖）
             bool keep_alive = request_.keep_alive();
 
-            // asio
-             asio::async_write(stream_, asio::buffer(arg.data(),arg.size()),
+            // 【改动 A-5】两段 buffer 一次性写出去：单段 buffer 时 asio 走 send()，
+            // 多段时走 sendmsg()（msg_iov 聚集写，等价于 writev）—— 都只是**一个**系统调用，
+            // 全程不拷贝、不分配 body。
+            //
+            // 这里为什么安全 —— 对比一下被替换掉的旧写法：
+            //   旧：asio::async_write(stream_, asio::buffer(arg.data(), arg.size()), ...)
+            //       arg 是 msg 里那个 std::string，而 msg 绑定的是 handle_request(...)
+            //       返回的**临时** variant；asio 的异步写内部只保存了 buffer 的**指针**，
+            //       并不拷贝数据。于是这个 full-expression(异步写) 一结束、variant 析构、string 的
+            //       堆内存 free 之后，异步写还拿着悬垂指针 —— 只要响应大到一次写不完
+            //       （需要第二次 write_some），那次写就会去读已释放的内存，是真正的 UAF。
+            //       这个机制我用最小复现确认过：socketpair + 强制很小的 SO_SNDBUF +
+            //       发起 async_write 后立刻 delete[]，ASan 报
+            //       "heap-use-after-free ... READ of size 8064 in send()"。
+            //       注意它是**潜在**的：响应小到一次 send() 就能写完时不会触发，
+            //       所以平时看不出来；大文件、或对端读得慢（发送缓冲填满）时才会真的踩到。
+            //   新：arg 只是"视图"，它指向的字节在 staticFileCache 里，活到进程结束。
+            //       视图对象本身会被 asio 拷进组合操作内部，所以放栈上（这里在 variant 里）
+            //       也完全没问题 —— 需要长期存活的是**被指向的内存**，不是视图本身。
+            asio::async_write(stream_, arg,
                 beast::bind_front_handler(
                     &Session::on_write,
                     this->shared_from_this(),
