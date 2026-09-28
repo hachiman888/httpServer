@@ -14,7 +14,7 @@
 
 | 依赖 | 要求 |
 |---|---|
-| 编译器 | **GCC 14+**（`shared_object_pool.hpp` 用了 C++23 的 `<print>`；GCC 13 会直接报 `fatal error: print: No such file or directory`） |
+| 编译器 | **GCC 14+** |
 | Boost | ≥ 1.83（asio / beast / system） |
 | OpenSSL | wss / HTTPS 分支需要。本仓库**不含证书** |
 | CMake | ≥ 3.16（只有 `main` 走 CMake） |
