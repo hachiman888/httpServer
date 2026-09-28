@@ -91,7 +91,7 @@ std::variant<std::string,http::message_generator> handle_request(
 {
     // 检验1： 只支持GET,HEAD,和POST方法
     if( req.method() != http::verb::get &&
-        req.method() != http::verb::head &&)
+        req.method() != http::verb::head)
         return bad_request("Unknown HTTP-method",req);
 
     // 检验2：请求路径合法性安全检查(防止路径穿越攻击，如 GET /../etc/passwd)
