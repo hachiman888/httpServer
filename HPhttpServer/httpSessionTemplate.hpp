@@ -10,8 +10,8 @@
 #include <variant>
 #include <memory>
 #include <type_traits>
-#include <array>      // response_view 里的 std::array<asio::const_buffer,2>
-#include <cstddef>    // std::size_t
+#include <array>      
+#include <cstddef>    
 
 namespace beast = boost::beast;
 namespace http = beast::http;
