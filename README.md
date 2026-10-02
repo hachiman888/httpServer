@@ -203,7 +203,7 @@ ctx.use_private_key_file("key.pem", ssl::context::pem);
 - **静态缓存不热更新**：改了文件必须重启；单文件 > 8 MiB 或总量 > 256 MiB 的文件不入缓存（会退回流式路径，不会误报 404）。
 - **错误分支很多只写了 `// 待报错`**：没有日志、没有统计、没有优雅关闭。
 - **`test2` / `test3` 不在 CMakeLists 里**，得手动 g++；整个仓库没有单元测试和 CI。
-- **POST 只在 `main` 分支实现**（`/email`）；模板分支的 POST 仍走 beast 的原路径。
+- **POST 只在 `main` 分支实现**（`/email`）；模板分支直接 400 拒绝（handle_request 只放行 GET/HEAD）。
 - **模板会话持有 `const staticFileCache&` 引用成员**：缓存的生命周期必须比所有 session 长。目前由 `Server` 持有，安全；但如果以后把缓存放到局部作用域就会悬垂。
 - **没有证书**，HTTPS/WSS 要自己生成并改代码。
 - **吞吐量没有专门调优过**，属于"够快、能说明问题"的水平。

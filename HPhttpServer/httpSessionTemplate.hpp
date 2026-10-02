@@ -131,7 +131,7 @@ std::variant<response_view,http::message_generator> handle_request(
     http::request<Body,http::basic_fields<Allocator>>&& req,
     const hp::staticFileCache& fileCache)    
 {
-    // 检验1： 只支持GET,HEAD,和POST方法
+    // 检验1： 只支持GET,HEAD
     if( req.method() != http::verb::get &&
         req.method() != http::verb::head)
         return bad_request("Unknown HTTP-method",req);
