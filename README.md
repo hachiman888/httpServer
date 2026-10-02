@@ -14,15 +14,15 @@
 
 | 依赖 | 要求 |
 |---|---|
-| 编译器 | **GCC 14+** |
-| Boost | ≥ 1.83（asio / beast / system）, <= 1.88 |
+| 编译器 | **GCC 13+** |
+| Boost | ≥ 1.83（asio / beast / system）, <= 1.87 |
 | OpenSSL | wss / HTTPS 分支需要。本仓库**不含证书** |
 | CMake | ≥ 3.16（只有 `main` 走 CMake） |
 | jsoncpp | 只有 `main` 分支需要（POST `/email` 解析 JSON） |
 
 ```bash
 # Ubuntu / Debian
-sudo apt install g++-14 cmake ninja-build libboost-all-dev libssl-dev libjsoncpp-dev
+sudo apt install g++-13 cmake ninja-build libboost-all-dev libssl-dev libjsoncpp-dev
 ```
 
 ### 三个入口
