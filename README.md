@@ -1,6 +1,6 @@
 # HPhttpServer
 
-用 **C++23 + Boost.Asio / Beast** 从零写起的 HTTP/1.1 服务器，包含两条实现路线（手写会话 / 模板化会话）和一个 WebSocket（ws + wss）实现。
+用 **C++20 + Boost.Asio / Beast** 从零写起的 HTTP/1.1 服务器，包含两条实现路线（手写会话 / 模板化会话）和一个 WebSocket（ws + wss）实现。
 
 > **定位**：这是个**练手项目，没有真实业务需求**。所以它演示的不是"怎么上线一个服务器"，而是：
 > 分层怎么切、静态文件怎么发得快、以及**性能数字要怎么量才不至于骗自己**。
@@ -15,7 +15,7 @@
 | 依赖 | 要求 |
 |---|---|
 | 编译器 | **GCC 14+** |
-| Boost | ≥ 1.83（asio / beast / system） |
+| Boost | ≥ 1.83（asio / beast / system）, <= 1.88 |
 | OpenSSL | wss / HTTPS 分支需要。本仓库**不含证书** |
 | CMake | ≥ 3.16（只有 `main` 走 CMake） |
 | jsoncpp | 只有 `main` 分支需要（POST `/email` 解析 JSON） |
@@ -42,13 +42,13 @@ cmake --build build -j
 ./build/main
 
 # ---------- test2（模板分支没进 CMakeLists，手动编）----------
-g++-14 -std=c++23 -O3 -DNDEBUG -I HPhttpServer -o HPhttpServer/test2 \
+g++-14 -std=c++20 -O3 -DNDEBUG -I HPhttpServer -o HPhttpServer/test2 \
     HPhttpServer/test2.cpp HPhttpServer/IOServicePool.cpp \
     -lboost_system -lpthread -lssl -lcrypto
 ./HPhttpServer/test2
 
 # ---------- test3 ----------
-g++-14 -std=c++23 -O3 -DNDEBUG -I HPhttpServer -o HPhttpServer/test3 \
+g++-14 -std=c++20 -O3 -DNDEBUG -I HPhttpServer -o HPhttpServer/test3 \
     HPhttpServer/test3.cpp HPhttpServer/IOServicePool.cpp \
     -lboost_system -lpthread -lssl -lcrypto
 ./HPhttpServer/test3
