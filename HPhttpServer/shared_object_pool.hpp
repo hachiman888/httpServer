@@ -9,36 +9,6 @@
 #include <mutex>
 #include <thread>
 
-
-/*
-主要改进与 Bug 修复说明
-解决对默认构造函数的依赖（核心需求）
-
-原问题：采用 new ObjectType[N] 批量开辟内存，强行要求类型具有默认无参构造函数。
-
-重构方案：采用 ::operator new[] 申请裸内存块（不触发构造），并利用 Get(Args&&... args) 完美支持完美转发（Variadic Templates + Perfect Forwarding）。只有在使用者调用 .Get(...) 时，才会触发 Placement New (::new (raw_ptr) ObjectType(...)) 进行初始化。
-
-修复 Extend 减法溢出 Bug
-
-原代码：Extend(capacity_ - num)。当 capacity_ < num 时，计算结果下溢为一个极其庞大的无符号正整数，导致试图分配太大的内存而触发 Crash。
-
-修复后：修正为 Extend(num - capacity_)。
-
-修复内存释放未定义行为（Heap Corruption）
-
-原代码：Extend 中用 new[] 分配数组，但在析构函数中对数组内每一个元素地址遍历调用标量 delete ptr，导致指针类型错配与重复释放内存崩溃。
-
-修复后：extend_blocks_ 专门保存每次扩容申请的起始块首地址，析构时统一使用 ::operator delete[] 安全释放整块内存。
-
-析构与生命周期管理精准化
-
-在 shared_ptr 的自定义 Deleter 中，当对象使用完毕归还时：手动显式调用 p->~ObjectType() 触发析构函数清理对象状态（释放内部资源），并将内存块地址丢回 free_queue_，彻底避免了数据残留问题。
-
-线程安全强化（Thread Safety）
-
-增加了 std::mutex 互斥锁，确保在多线程高并发场景下从 pool 中申请和归还内存时不发生竞争条件（Data Race）。
-*/
-
 namespace ig{
     static constexpr std::size_t kObjectPoolDefaultSize = 1500;      // 对象池默认缓存对象的数量
     static constexpr std::size_t kObjectPoolDefaultExtendSize = 300; //
