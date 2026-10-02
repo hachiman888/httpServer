@@ -42,13 +42,13 @@ cmake --build build -j
 ./build/main
 
 # ---------- test2（模板分支没进 CMakeLists，手动编）----------
-g++-14 -std=c++20 -O3 -DNDEBUG -I HPhttpServer -o HPhttpServer/test2 \
+g++ -std=c++20 -O3 -DNDEBUG -I HPhttpServer -o HPhttpServer/test2 \
     HPhttpServer/test2.cpp HPhttpServer/IOServicePool.cpp \
     -lboost_system -lpthread -lssl -lcrypto
 ./HPhttpServer/test2
 
 # ---------- test3 ----------
-g++-14 -std=c++20 -O3 -DNDEBUG -I HPhttpServer -o HPhttpServer/test3 \
+g++ -std=c++20 -O3 -DNDEBUG -I HPhttpServer -o HPhttpServer/test3 \
     HPhttpServer/test3.cpp HPhttpServer/IOServicePool.cpp \
     -lboost_system -lpthread -lssl -lcrypto
 ./HPhttpServer/test3
