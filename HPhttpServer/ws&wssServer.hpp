@@ -1,3 +1,4 @@
+#pragma once
 #include "wsSessionTemplate.hpp"
 
 template <class StreamType>
